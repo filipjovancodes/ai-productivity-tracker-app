@@ -32,6 +32,20 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
     loadMessages()
   }, [])
 
+  // Poll for new messages every 3 seconds to get n8n responses
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const recentMessages = await getRecentMessages(20)
+        setMessages(recentMessages)
+      } catch (error) {
+        console.error("Error polling messages:", error)
+      }
+    }, 3000) // Poll every 3 seconds
+
+    return () => clearInterval(interval)
+  }, [])
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
@@ -117,7 +131,12 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
                 {message.content}
               </p>
               {message.source === "n8n" && (
-                <p className="text-xs text-blue-600 mt-1">from n8n</p>
+                <div className="text-xs text-blue-600 mt-1">
+                  <p>from n8n</p>
+                  {message.metadata?.action && (
+                    <p className="text-blue-500">Action: {message.metadata.action}</p>
+                  )}
+                </div>
               )}
             </div>
           </div>
