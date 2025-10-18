@@ -201,32 +201,40 @@ async function handleLogPast(supabase: any, body: any) {
 
   console.log("Logging past activities:", { user_id, entries })
 
-  const activitiesToInsert = entries.map((entry: any) => {
-    const startTime = new Date(entry.start)
-    const endTime = new Date(entry.end)
+  const activityIds = []
+
+  // Insert each activity using the secure function
+  for (const entry of entries) {
+    const startTime = new Date(entry.start_time || entry.start)
+    const endTime = new Date(entry.end_time || entry.end)
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
 
-    return {
-      user_id: user_id,
-      activity_name: entry.activity,
-      started_at: entry.start,
-      ended_at: entry.end,
-      duration_minutes: durationMinutes,
+    console.log("Inserting past activity:", {
+      activity: entry.activity,
+      start: startTime.toISOString(),
+      end: endTime.toISOString(),
+      duration: durationMinutes
+    })
+
+    const { data: activityId, error } = await supabase
+      .rpc('insert_n8n_activity', {
+        p_user_id: user_id,
+        p_activity_name: entry.activity,
+        p_started_at: startTime.toISOString(),
+        p_ended_at: endTime.toISOString(),
+        p_duration_minutes: durationMinutes,
+      })
+
+    if (error) {
+      console.error("❌ Error logging past activity:", error)
+      return { success: false, error: error.message }
     }
-  })
 
-  const { data, error } = await supabase
-    .from("activities")
-    .insert(activitiesToInsert)
-    .select()
-
-  if (error) {
-    console.error("❌ Error logging past activities:", error)
-    return { success: false, error: error.message }
+    activityIds.push(activityId)
   }
 
-  console.log("✅ Past activities logged successfully:", data)
-  return { success: true, activities: data }
+  console.log("✅ Past activities logged successfully:", activityIds)
+  return { success: true, activities: activityIds }
 }
 
 async function handleUnsure(supabase: any, body: any) {
