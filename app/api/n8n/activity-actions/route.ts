@@ -58,9 +58,10 @@ export async function POST(req: NextRequest) {
       console.log("Action result:", result)
 
       if (!result.success) {
-        console.log("❌ Action failed:", result.error)
+        const errorMessage = 'error' in result ? result.error : 'Unknown error'
+        console.log("❌ Action failed:", errorMessage)
         return NextResponse.json({ 
-          error: result.error 
+          error: errorMessage 
         }, { status: 500 })
       }
     } else {

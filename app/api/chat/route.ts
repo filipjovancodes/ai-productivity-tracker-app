@@ -48,11 +48,14 @@ export async function POST(req: NextRequest) {
     const result = await processAIResponse(supabase, user_id, aiResponse)
 
     // Store AI response message
+    const activityId = 'activityId' in result ? result.activityId : 
+                      'activityIds' in result ? result.activityIds?.[0] : null
+    
     const { data: aiMessageId, error: aiMessageError } = await supabase
       .rpc('insert_n8n_message', {
         p_user_id: user_id,
         p_content: aiResponse.outputMessage,
-        p_activity_id: result.activityId || null,
+        p_activity_id: activityId,
         p_role: 'assistant',
         p_source: 'ai',
         p_metadata: {
