@@ -8,6 +8,25 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Send, Loader2 } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { getRecentMessages, type ChatMessage } from "@/lib/message-service-client"
+import { createClient } from "@/lib/supabase/client"
+import { useClientOnly } from "@/lib/hooks/use-client-only"
+
+// Helper function to get current user ID
+async function getCurrentUserId(): Promise<string> {
+  // Prevent server-side execution
+  if (typeof window === 'undefined') {
+    throw new Error("Cannot get user ID on server side")
+  }
+
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  
+  if (!user) {
+    throw new Error("User not authenticated")
+  }
+  
+  return user.id
+}
 
 interface ActivityChatProps {
   onActivityChange?: () => void
@@ -17,10 +36,13 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const isClient = useClientOnly()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Load recent messages on component mount
   useEffect(() => {
+    if (!isClient) return
+    
     const loadMessages = async () => {
       try {
         const recentMessages = await getRecentMessages(20)
@@ -30,10 +52,12 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
       }
     }
     loadMessages()
-  }, [])
+  }, [isClient])
 
   // Poll for new messages every 3 seconds to get n8n responses
   useEffect(() => {
+    if (!isClient) return
+    
     const interval = setInterval(async () => {
       try {
         const recentMessages = await getRecentMessages(20)
@@ -44,7 +68,7 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
     }, 3000) // Poll every 3 seconds
 
     return () => clearInterval(interval)
-  }, [])
+  }, [isClient])
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
@@ -76,20 +100,26 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
     setMessages(prev => [...prev, newUserMessage])
 
     try {
-      // Send message to n8n via our API
-      const response = await fetch("/api/n8n/send-message", {
+      // Get current user ID (you'll need to implement this)
+      const userId = await getCurrentUserId()
+      
+      // Send message to local AI chat
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ text: userMessage }),
+        body: JSON.stringify({ 
+          message: userMessage,
+          user_id: userId
+        }),
       })
 
       if (!response.ok) {
         throw new Error("Failed to send message")
       }
 
-      // Reload messages to get any n8n responses
+      // Reload messages to get AI responses
       const recentMessages = await getRecentMessages(20)
       setMessages(recentMessages)
     } catch (error) {
@@ -99,6 +129,19 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  // Don't render until client-side to prevent hydration issues
+  if (!isClient) {
+    return (
+      <div className="flex flex-col h-[500px]">
+        <div className="flex-1 overflow-y-auto space-y-4 p-4">
+          <div className="flex justify-center items-center h-full">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -130,9 +173,9 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
               <p className="text-sm whitespace-pre-wrap">
                 {message.content}
               </p>
-              {message.source === "n8n" && (
+              {(message.source === "n8n" || message.metadata?.from_ai) && (
                 <div className="text-xs text-blue-600 mt-1">
-                  <p>from n8n</p>
+                  <p>{message.metadata?.from_ai ? "from AI" : "from n8n"}</p>
                   {message.metadata?.action && (
                     <p className="text-blue-500">Action: {message.metadata.action}</p>
                   )}

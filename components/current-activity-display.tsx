@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Clock } from "lucide-react"
 import type { Activity } from "@/lib/types"
+import { useClientOnly } from "@/lib/hooks/use-client-only"
 
 interface CurrentActivityDisplayProps {
   initialActivity: Activity | null
@@ -13,6 +14,7 @@ interface CurrentActivityDisplayProps {
 export function CurrentActivityDisplay({ initialActivity }: CurrentActivityDisplayProps) {
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [elapsed, setElapsed] = useState(0)
+  const isClient = useClientOnly()
 
   useEffect(() => {
     setActivity(initialActivity)
@@ -20,7 +22,7 @@ export function CurrentActivityDisplay({ initialActivity }: CurrentActivityDispl
   }, [initialActivity])
 
   useEffect(() => {
-    if (!activity) return
+    if (!isClient || !activity) return
 
     const interval = setInterval(() => {
       const start = new Date(activity.started_at).getTime()
@@ -30,7 +32,18 @@ export function CurrentActivityDisplay({ initialActivity }: CurrentActivityDispl
     }, 1000)
 
     return () => clearInterval(interval)
-  }, [activity])
+  }, [isClient, activity])
+
+  // Don't render timer until client-side to prevent hydration issues
+  if (!isClient) {
+    return (
+      <Card className="border-dashed">
+        <CardContent className="flex items-center justify-center py-8">
+          <p className="text-muted-foreground text-sm">Loading...</p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   if (!activity) {
     return (
