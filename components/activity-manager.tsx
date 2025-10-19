@@ -8,18 +8,18 @@ import { Label } from "@/components/ui/label"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, Calendar, Clock, Activity } from "lucide-react"
+import { Edit, Trash2, Calendar, Clock, Activity as ActivityIcon } from "lucide-react"
 import { format } from "date-fns"
-import type { ActivityDetails } from "@/lib/activity-edit-service"
+import type { Activity } from "@/lib/types"
 
 interface ActivityManagerProps {
   onActivityChange?: () => void
 }
 
 export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
-  const [activities, setActivities] = useState<ActivityDetails[]>([])
+  const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
-  const [editingActivity, setEditingActivity] = useState<ActivityDetails | null>(null)
+  const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [editForm, setEditForm] = useState({
     activity_name: "",
     started_at: "",
@@ -47,7 +47,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
     }
   }
 
-  const handleEdit = (activity: ActivityDetails) => {
+  const handleEdit = (activity: Activity) => {
     setEditingActivity(activity)
     setEditForm({
       activity_name: activity.activity_name,
@@ -151,7 +151,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Activity className="h-5 w-5" />
+          <ActivityIcon className="h-5 w-5" />
           Activity Manager
         </CardTitle>
         <CardDescription>
