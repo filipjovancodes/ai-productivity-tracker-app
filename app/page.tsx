@@ -5,6 +5,7 @@ import { CurrentActivityDisplay } from "@/components/current-activity-display"
 import { ActivityChat } from "@/components/activity-chat"
 import { ActivityAnalytics } from "@/components/activity-analytics"
 import { QuickActions } from "@/components/quick-actions"
+import { ActivityManager } from "@/components/activity-manager"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Activity } from "lucide-react"
@@ -64,9 +65,10 @@ export default async function Home() {
             <CurrentActivityDisplay initialActivity={currentActivity} />
 
             <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="chat">AI Chat</TabsTrigger>
                 <TabsTrigger value="analytics">Analytics</TabsTrigger>
+                <TabsTrigger value="manage">Manage</TabsTrigger>
               </TabsList>
               <TabsContent value="chat">
                 <Card>
@@ -81,6 +83,9 @@ export default async function Home() {
               </TabsContent>
               <TabsContent value="analytics">
                 <ActivityAnalytics stats={stats} />
+              </TabsContent>
+              <TabsContent value="manage">
+                <ActivityManager />
               </TabsContent>
             </Tabs>
           </div>
