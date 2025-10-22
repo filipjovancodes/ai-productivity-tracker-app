@@ -5,7 +5,7 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Send, Loader2 } from "lucide-react"
+import { Send, Loader2, Check, X } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { getRecentMessages, type ChatMessage } from "@/lib/message-service-client"
 import { createClient } from "@/lib/supabase/client"
@@ -36,6 +36,11 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
   const [input, setInput] = useState("")
   const [messages, setMessages] = useState<ChatMessage[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const [pendingConfirmation, setPendingConfirmation] = useState<{
+    messageId: string
+    action: string
+    data: any
+  } | null>(null)
   const isClient = useClientOnly()
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -80,6 +85,24 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
       onActivityChange?.()
     }
   }, [messages.length, onActivityChange])
+
+  // Check for confirmation requests when messages change
+  useEffect(() => {
+    if (!isClient || messages.length === 0) return
+
+    const lastMessage = messages[messages.length - 1]
+    if (lastMessage.role === "assistant" && lastMessage.metadata?.action) {
+      const action = lastMessage.metadata.action
+      if ((action === "edit_activities" || action === "delete_activities") && 
+          lastMessage.content.includes("Would you like to")) {
+        setPendingConfirmation({
+          messageId: lastMessage.id,
+          action: action,
+          data: lastMessage.metadata
+        })
+      }
+    }
+  }, [messages, isClient])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -126,6 +149,39 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
       console.error("Error sending message:", error)
       // Remove the temporary user message on error
       setMessages(prev => prev.filter(msg => msg.id !== newUserMessage.id))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleConfirmation = async (confirmed: boolean) => {
+    if (!pendingConfirmation) return
+
+    setIsLoading(true)
+    setPendingConfirmation(null)
+
+    try {
+      const userId = await getCurrentUserId()
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ 
+          message: confirmed ? "yes" : "no",
+          user_id: userId
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to send confirmation")
+      }
+
+      // Reload messages to get AI responses
+      const recentMessages = await getRecentMessages(20)
+      setMessages(recentMessages)
+    } catch (error) {
+      console.error("Error sending confirmation:", error)
     } finally {
       setIsLoading(false)
     }
@@ -179,6 +235,31 @@ export function ActivityChat({ onActivityChange }: ActivityChatProps) {
                   {message.metadata?.action && (
                     <p className="text-blue-500">Action: {message.metadata.action}</p>
                   )}
+                </div>
+              )}
+              
+              {/* Show confirmation buttons for edit/delete operations */}
+              {pendingConfirmation && 
+               pendingConfirmation.messageId === message.id && 
+               (message.metadata?.action === "edit_activities" || message.metadata?.action === "delete_activities") && (
+                <div className="flex gap-2 mt-3">
+                  <Button 
+                    size="sm" 
+                    onClick={() => handleConfirmation(true)}
+                    className="bg-green-600 hover:bg-green-700"
+                  >
+                    <Check className="h-3 w-3 mr-1" />
+                    Yes
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleConfirmation(false)}
+                    className="border-red-300 text-red-600 hover:bg-red-50"
+                  >
+                    <X className="h-3 w-3 mr-1" />
+                    No
+                  </Button>
                 </div>
               )}
             </div>
