@@ -105,7 +105,7 @@ async function callAIForProductivityParsing(userMessage: string, userId: string)
 }> {
   const systemPrompt = `You are a productivity tracking assistant.
 
-MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON.
+MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON. No extra text or markdown.
 
 Current time: ${new Date().toISOString()}
 
@@ -132,7 +132,7 @@ Parse this user input: "${userMessage}"`
   try {
     // AWS Bedrock configuration
     const region = process.env.AWS_REGION || 'us-east-1'
-    const modelId = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
+    const modelId = 'anthropic.claude-3-haiku-20240307-v1:0'
     
     const client = new BedrockRuntimeClient({
       region: region,
