@@ -127,7 +127,7 @@ Parse this user input: "${userMessage}"`
   try {
     // AWS Bedrock configuration
     const region = process.env.AWS_REGION || 'us-east-1'
-    const modelId = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
+    const modelId = 'anthropic.claude-3-5-sonnet-20240620-v1:0'
     
     const client = new BedrockRuntimeClient({
       region: region,
