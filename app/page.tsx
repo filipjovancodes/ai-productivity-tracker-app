@@ -1,12 +1,12 @@
+import { CardContent } from "@/components/ui/card"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
 import { getCurrentActivity, getActivityStats, getTopActivities } from "@/lib/activity-service"
 import { CurrentActivityDisplay } from "@/components/current-activity-display"
 import { ActivityChat } from "@/components/activity-chat"
 import { ActivityAnalytics } from "@/components/activity-analytics"
-import { QuickActions } from "@/components/quick-actions"
 import { ActivityManager } from "@/components/activity-manager"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Activity } from "lucide-react"
 
@@ -50,49 +50,32 @@ export default async function Home() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <Card className="mb-6 bg-primary/5 border-primary/20">
-          <CardHeader>
-            <CardTitle className="text-lg">How to Use</CardTitle>
-            <CardDescription>
-              Simply tell the AI what you're doing in natural language. Try "I'm working" to start tracking, or "stop"
-              to end your current session. Use quick actions for your most frequent activities.
-            </CardDescription>
-          </CardHeader>
-        </Card>
+        <div className="space-y-6">
+          <CurrentActivityDisplay initialActivity={currentActivity} />
 
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
-            <CurrentActivityDisplay initialActivity={currentActivity} />
+          <Tabs defaultValue="chat" className="w-full">
+            <TabsList className="grid w-full grid-cols-3">
+              <TabsTrigger value="chat">Chat</TabsTrigger>
+              <TabsTrigger value="activities">Activities</TabsTrigger>
+              <TabsTrigger value="analytics">Analytics</TabsTrigger>
+            </TabsList>
 
-            <Tabs defaultValue="chat" className="w-full">
-              <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="chat">AI Chat</TabsTrigger>
-                <TabsTrigger value="analytics">Analytics</TabsTrigger>
-                <TabsTrigger value="manage">Manage</TabsTrigger>
-              </TabsList>
-              <TabsContent value="chat">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Activity Chat</CardTitle>
-                    <CardDescription>Tell me what you're working on</CardDescription>
-                  </CardHeader>
-                  <CardContent className="p-0">
-                    <ActivityChat />
-                  </CardContent>
-                </Card>
-              </TabsContent>
-              <TabsContent value="analytics">
-                <ActivityAnalytics stats={stats} />
-              </TabsContent>
-              <TabsContent value="manage">
-                <ActivityManager />
-              </TabsContent>
-            </Tabs>
-          </div>
+            <TabsContent value="chat">
+              <Card>
+                <CardContent className="p-4">
+                  <ActivityChat topActivities={topActivities} hasCurrentActivity={currentActivity !== null} />
+                </CardContent>
+              </Card>
+            </TabsContent>
 
-          <div>
-            <QuickActions topActivities={topActivities} hasCurrentActivity={currentActivity !== null} />
-          </div>
+            <TabsContent value="activities">
+              <ActivityManager />
+            </TabsContent>
+
+            <TabsContent value="analytics">
+              <ActivityAnalytics stats={stats} />
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
     </div>

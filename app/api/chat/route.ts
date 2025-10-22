@@ -97,15 +97,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function callAIForProductivityParsing(userMessage: string, userId: string): Promise<{
-  action: string;
-  outputMessage: string;
-  activityId: string | null;
-  aiJsonData: any;
-}> {
+async function callAIForProductivityParsing(userMessage: string, userId: string) {
   const systemPrompt = `You are a productivity tracking assistant.
 
-MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON. No extra text or markdown.
+MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON.
 
 Current time: ${new Date().toISOString()}
 
@@ -132,7 +127,7 @@ Parse this user input: "${userMessage}"`
   try {
     // AWS Bedrock configuration
     const region = process.env.AWS_REGION || 'us-east-1'
-    const modelId = 'anthropic.claude-3-haiku-20240307-v1:0'
+    const modelId = 'anthropic.claude-3-5-sonnet-20241022-v2:0'
     
     const client = new BedrockRuntimeClient({
       region: region,
@@ -315,17 +310,9 @@ Parse this user input: "${userMessage}"`
 
   } catch (error) {
     console.error("❌ Error calling Bedrock Converse API:", error)
-    
-    // Handle throttling with retry logic
-    if (error instanceof Error && error.message.includes('ThrottlingException')) {
-      console.log("🔄 Throttling detected, retrying with backoff...")
-      return await retryWithBackoff(() => callAIForProductivityParsing(userMessage, userId), 3)
-    }
-    
     return {
       action: "unsure",
       outputMessage: "I'm having trouble understanding. Could you please clarify what you'd like to track?",
-      activityId: null,
       aiJsonData: null
     }
   }
@@ -590,30 +577,4 @@ async function handleConfirmation(userMessage: string, userId: string) {
       outputMessage: "❌ Operation cancelled."
     }
   }
-}
-
-// Retry function with exponential backoff for throttling
-async function retryWithBackoff<T>(
-  fn: () => Promise<T>,
-  maxRetries: number,
-  baseDelay: number = 1000
-): Promise<T> {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      return await fn()
-    } catch (error) {
-      if (attempt === maxRetries) {
-        throw error
-      }
-      
-      if (error instanceof Error && error.message.includes('ThrottlingException')) {
-        const delay = baseDelay * Math.pow(2, attempt - 1) + Math.random() * 1000
-        console.log(`🔄 Retry attempt ${attempt}/${maxRetries} after ${Math.round(delay)}ms delay`)
-        await new Promise(resolve => setTimeout(resolve, delay))
-      } else {
-        throw error
-      }
-    }
-  }
-  throw new Error('Max retries exceeded')
 }

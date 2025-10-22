@@ -5,10 +5,28 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, Calendar, Clock, Activity as ActivityIcon } from "lucide-react"
+import { Edit, Trash2, Calendar, Clock, ActivityIcon, Plus } from "lucide-react"
 import { format } from "date-fns"
 import type { Activity } from "@/lib/types"
 
@@ -20,23 +38,23 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
   const [activities, setActivities] = useState<Activity[]>([])
   const [loading, setLoading] = useState(true)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  const [isCreating, setIsCreating] = useState(false)
   const [editForm, setEditForm] = useState({
     activity_name: "",
     started_at: "",
     ended_at: "",
-    duration_minutes: ""
+    duration_minutes: "",
   })
 
-  // Load activities on mount
   useEffect(() => {
     loadActivities()
   }, [])
 
   const loadActivities = async () => {
     try {
-      const response = await fetch('/api/activities?limit=20')
+      const response = await fetch("/api/activities?limit=20")
       const data = await response.json()
-      
+
       if (data.success) {
         setActivities(data.activities)
       }
@@ -51,9 +69,9 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
     setEditingActivity(activity)
     setEditForm({
       activity_name: activity.activity_name,
-      started_at: activity.started_at.slice(0, 16), // Format for datetime-local input
+      started_at: activity.started_at.slice(0, 16),
       ended_at: activity.ended_at ? activity.ended_at.slice(0, 16) : "",
-      duration_minutes: activity.duration_minutes?.toString() || ""
+      duration_minutes: activity.duration_minutes?.toString() || "",
     })
   }
 
@@ -62,21 +80,21 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
 
     try {
       const updates: any = {}
-      
+
       if (editForm.activity_name !== editingActivity.activity_name) {
         updates.activity_name = editForm.activity_name
       }
-      
+
       if (editForm.started_at !== editingActivity.started_at.slice(0, 16)) {
         updates.started_at = new Date(editForm.started_at).toISOString()
       }
-      
+
       if (editForm.ended_at !== (editingActivity.ended_at?.slice(0, 16) || "")) {
         updates.ended_at = editForm.ended_at ? new Date(editForm.ended_at).toISOString() : null
       }
-      
+
       if (editForm.duration_minutes !== (editingActivity.duration_minutes?.toString() || "")) {
-        updates.duration_minutes = editForm.duration_minutes ? parseInt(editForm.duration_minutes) : null
+        updates.duration_minutes = editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null
       }
 
       if (Object.keys(updates).length === 0) {
@@ -85,13 +103,13 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
       }
 
       const response = await fetch(`/api/activities/${editingActivity.id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updates)
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updates),
       })
 
       const data = await response.json()
-      
+
       if (data.success) {
         await loadActivities()
         onActivityChange?.()
@@ -108,11 +126,11 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
   const handleDelete = async (activityId: string) => {
     try {
       const response = await fetch(`/api/activities/${activityId}`, {
-        method: 'DELETE'
+        method: "DELETE",
       })
 
       const data = await response.json()
-      
+
       if (data.success) {
         await loadActivities()
         onActivityChange?.()
@@ -136,6 +154,47 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
     return format(new Date(dateString), "MMM dd, yyyy 'at' h:mm a")
   }
 
+  const handleCreate = () => {
+    const now = new Date()
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
+
+    setIsCreating(true)
+    setEditForm({
+      activity_name: "",
+      started_at: oneHourAgo.toISOString().slice(0, 16),
+      ended_at: now.toISOString().slice(0, 16),
+      duration_minutes: "60",
+    })
+  }
+
+  const handleSaveCreate = async () => {
+    try {
+      const response = await fetch("/api/activities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          activity_name: editForm.activity_name,
+          started_at: new Date(editForm.started_at).toISOString(),
+          ended_at: editForm.ended_at ? new Date(editForm.ended_at).toISOString() : null,
+          duration_minutes: editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        await loadActivities()
+        onActivityChange?.()
+        setIsCreating(false)
+      } else {
+        alert("Error creating activity: " + data.error)
+      }
+    } catch (error) {
+      console.error("Error creating activity:", error)
+      alert("Error creating activity")
+    }
+  }
+
   if (loading) {
     return (
       <Card>
@@ -150,13 +209,73 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ActivityIcon className="h-5 w-5" />
-          Activity Manager
-        </CardTitle>
-        <CardDescription>
-          View, edit, and delete your activity sessions
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <ActivityIcon className="h-5 w-5" />
+              Activity Manager
+            </CardTitle>
+            <CardDescription>View, edit, and delete your activity sessions</CardDescription>
+          </div>
+          <Dialog open={isCreating} onOpenChange={setIsCreating}>
+            <DialogTrigger asChild>
+              <Button onClick={handleCreate}>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Activity
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Activity</DialogTitle>
+                <DialogDescription>Manually add a new activity session.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="new_activity_name">Activity Name</Label>
+                  <Input
+                    id="new_activity_name"
+                    value={editForm.activity_name}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, activity_name: e.target.value }))}
+                    placeholder="e.g., Working, Meeting, Break"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new_started_at">Start Time</Label>
+                  <Input
+                    id="new_started_at"
+                    type="datetime-local"
+                    value={editForm.started_at}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, started_at: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new_ended_at">End Time</Label>
+                  <Input
+                    id="new_ended_at"
+                    type="datetime-local"
+                    value={editForm.ended_at}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="new_duration_minutes">Duration (minutes)</Label>
+                  <Input
+                    id="new_duration_minutes"
+                    type="number"
+                    value={editForm.duration_minutes}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsCreating(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSaveCreate}>Create Activity</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
       </CardHeader>
       <CardContent>
         {activities.length === 0 ? (
@@ -189,20 +308,14 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                     </Badge>
                     <Dialog>
                       <DialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleEdit(activity)}
-                        >
+                        <Button variant="outline" size="sm" onClick={() => handleEdit(activity)}>
                           <Edit className="h-4 w-4" />
                         </Button>
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
                           <DialogTitle>Edit Activity</DialogTitle>
-                          <DialogDescription>
-                            Update the details of this activity session.
-                          </DialogDescription>
+                          <DialogDescription>Update the details of this activity session.</DialogDescription>
                         </DialogHeader>
                         <div className="space-y-4">
                           <div>
@@ -210,7 +323,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                             <Input
                               id="activity_name"
                               value={editForm.activity_name}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, activity_name: e.target.value }))}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, activity_name: e.target.value }))}
                             />
                           </div>
                           <div>
@@ -219,7 +332,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                               id="started_at"
                               type="datetime-local"
                               value={editForm.started_at}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, started_at: e.target.value }))}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, started_at: e.target.value }))}
                             />
                           </div>
                           <div>
@@ -228,7 +341,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                               id="ended_at"
                               type="datetime-local"
                               value={editForm.ended_at}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, ended_at: e.target.value }))}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
                             />
                           </div>
                           <div>
@@ -237,7 +350,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                               id="duration_minutes"
                               type="number"
                               value={editForm.duration_minutes}
-                              onChange={(e) => setEditForm(prev => ({ ...prev, duration_minutes: e.target.value }))}
+                              onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
                             />
                           </div>
                         </div>
@@ -245,9 +358,7 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
                           <Button variant="outline" onClick={() => setEditingActivity(null)}>
                             Cancel
                           </Button>
-                          <Button onClick={handleSaveEdit}>
-                            Save Changes
-                          </Button>
+                          <Button onClick={handleSaveEdit}>Save Changes</Button>
                         </DialogFooter>
                       </DialogContent>
                     </Dialog>

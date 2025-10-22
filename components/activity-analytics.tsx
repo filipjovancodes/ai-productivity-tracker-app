@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Cell } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import type { ActivityStats } from "@/lib/types"
-import { Clock, TrendingUp } from "lucide-react"
+import { Clock, TrendingUp, BarChart3 } from "lucide-react"
 
 interface ActivityAnalyticsProps {
   stats: ActivityStats[]
@@ -71,6 +71,63 @@ export function ActivityAnalytics({ stats }: ActivityAnalyticsProps) {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5" />
+            Activity Comparison
+          </CardTitle>
+          <CardDescription>Compare time spent across activities</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ChartContainer
+            config={{
+              minutes: {
+                label: "Minutes",
+                color: "hsl(var(--chart-1))",
+              },
+            }}
+            className="h-[300px]"
+          >
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={chartData} layout="vertical">
+                <XAxis
+                  type="number"
+                  fontSize={12}
+                  tickLine={false}
+                  axisLine={false}
+                  tickFormatter={(value) => `${Math.floor(value / 60)}h`}
+                />
+                <YAxis type="category" dataKey="name" fontSize={12} tickLine={false} axisLine={false} width={100} />
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      formatter={(value, name, props) => {
+                        const hours = Math.floor(Number(value) / 60)
+                        const mins = Number(value) % 60
+                        return (
+                          <div className="flex flex-col gap-1">
+                            <div>
+                              {hours}h {mins}m
+                            </div>
+                            <div className="text-xs text-muted-foreground">{props.payload.sessions} sessions</div>
+                          </div>
+                        )
+                      }}
+                    />
+                  }
+                />
+                <Bar dataKey="minutes" radius={[0, 8, 8, 0]}>
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
