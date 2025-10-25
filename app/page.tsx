@@ -44,11 +44,16 @@ export default async function Home() {
                 <p className="text-sm text-muted-foreground">Track your time with AI</p>
               </div>
             </div>
-            <form action="/auth/signout" method="post">
-              <button type="submit" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Sign out
-              </button>
-            </form>
+            <div className="flex items-center gap-4">
+              <a href="/subscription" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                Subscription
+              </a>
+              <form action="/auth/signout" method="post">
+                <button type="submit" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
+                  Sign out
+                </button>
+              </form>
+            </div>
           </div>
         </div>
       </header>

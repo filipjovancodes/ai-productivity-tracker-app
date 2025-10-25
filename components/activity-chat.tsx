@@ -244,6 +244,11 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
       })
 
       if (!response.ok) {
+        const errorData = await response.json()
+        if (response.status === 429) {
+          // Usage limit exceeded
+          throw new Error(`Usage limit exceeded: ${errorData.details}`)
+        }
         throw new Error("Failed to send message")
       }
 
@@ -257,6 +262,17 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     } catch (error) {
       console.error("Error sending message:", error)
       setMessages((prev) => prev.filter((msg) => msg.id !== newUserMessage.id))
+      
+      // Show usage limit error with upgrade link
+      if (error instanceof Error && error.message.includes("Usage limit exceeded")) {
+        setMessages((prev) => [...prev, {
+          id: `error-${Date.now()}`,
+          role: "assistant" as const,
+          content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
+          created_at: new Date().toISOString(),
+          source: "system"
+        }])
+      }
     } finally {
       setIsLoading(false)
     }

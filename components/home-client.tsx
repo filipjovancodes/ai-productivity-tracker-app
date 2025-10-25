@@ -6,6 +6,7 @@ import { CurrentActivityDisplay } from "@/components/current-activity-display"
 import { ActivityChat } from "@/components/activity-chat"
 import { ActivityAnalytics } from "@/components/activity-analytics"
 import { ActivityManager } from "@/components/activity-manager"
+import { UsageIndicator } from "@/components/usage-indicator"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import type { Activity, ActivityStats } from "@/lib/types"
@@ -62,14 +63,18 @@ export function HomeClient({
         </TabsList>
 
         <TabsContent value="chat" ref={chatRef}>
-          <Card>
-            <CardContent className="p-4">
-              <ActivityChat 
-                initialMessages={recentMessages}
-                onActivityChange={handleActivityChange}
-              />
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardContent className="p-4">
+                <ActivityChat 
+                  initialMessages={recentMessages}
+                  onActivityChange={handleActivityChange}
+                />
+              </CardContent>
+            </Card>
+            
+            <UsageIndicator refreshTrigger={refreshTrigger} />
+          </div>
         </TabsContent>
 
         <TabsContent value="activities">

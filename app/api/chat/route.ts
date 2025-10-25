@@ -24,6 +24,35 @@ export async function POST(req: NextRequest) {
     // Create supabase client
     const supabase = await createClient()
 
+    // Check if user can make AI request (usage limit)
+    const { data: canMakeRequest, error: usageError } = await supabase
+      .rpc('can_make_ai_request', {
+        p_user_id: user_id
+      })
+
+    if (usageError) {
+      console.error("❌ Error checking usage limit:", usageError)
+      return NextResponse.json({ 
+        error: "Failed to check usage limit" 
+      }, { status: 500 })
+    }
+
+    if (!canMakeRequest) {
+      // Get user's current usage for the error message
+      const { data: currentUsage } = await supabase
+        .rpc('get_user_monthly_usage', {
+          p_user_id: user_id,
+          p_usage_type: 'ai_message'
+        })
+
+      return NextResponse.json({ 
+        error: "Usage limit exceeded",
+        details: "You've reached your monthly limit of AI messages. Please upgrade your plan to continue.",
+        current_usage: currentUsage,
+        upgrade_url: "/subscription"
+      }, { status: 429 })
+    }
+
     // Store user message
     const { data: userMessageId, error: userMessageError } = await supabase
       .rpc('insert_n8n_message', {
@@ -90,6 +119,18 @@ export async function POST(req: NextRequest) {
 
     if (aiMessageError) {
       console.error("❌ Error storing AI message:", aiMessageError)
+    }
+
+    // Track usage after successful AI response
+    const { error: trackError } = await supabase
+      .rpc('track_usage', {
+        p_user_id: user_id,
+        p_usage_type: 'ai_message',
+        p_count: 1
+      })
+
+    if (trackError) {
+      console.error("❌ Error tracking usage:", trackError)
     }
 
     return NextResponse.json({
