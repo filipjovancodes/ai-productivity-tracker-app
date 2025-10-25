@@ -32,11 +32,12 @@ import type { Activity } from "@/lib/types"
 
 interface ActivityManagerProps {
   onActivityChange?: () => void
+  initialActivities?: Activity[]
 }
 
-export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
-  const [activities, setActivities] = useState<Activity[]>([])
-  const [loading, setLoading] = useState(true)
+export function ActivityManager({ onActivityChange, initialActivities }: ActivityManagerProps) {
+  const [activities, setActivities] = useState<Activity[]>(initialActivities || [])
+  const [loading, setLoading] = useState(!initialActivities)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
   const [isCreating, setIsCreating] = useState(false)
   const [editForm, setEditForm] = useState({
@@ -47,8 +48,11 @@ export function ActivityManager({ onActivityChange }: ActivityManagerProps) {
   })
 
   useEffect(() => {
-    loadActivities()
-  }, [])
+    // Only load if we don't have initial activities
+    if (!initialActivities) {
+      loadActivities()
+    }
+  }, [initialActivities])
 
   const loadActivities = async () => {
     try {

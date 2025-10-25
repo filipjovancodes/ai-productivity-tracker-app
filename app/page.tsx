@@ -1,7 +1,8 @@
 import { CardContent } from "@/components/ui/card"
 import { redirect } from "next/navigation"
 import { createClient } from "@/lib/supabase/server"
-import { getCurrentActivity, getActivityStats, getTopActivities } from "@/lib/activity-service"
+import { getCurrentActivity, getActivityStats, getTopActivities, getRecentActivities } from "@/lib/activity-service"
+import { getRecentMessages } from "@/lib/message-service"
 import { CurrentActivityDisplay } from "@/components/current-activity-display"
 import { ActivityChat } from "@/components/activity-chat"
 import { ActivityAnalytics } from "@/components/activity-analytics"
@@ -9,6 +10,7 @@ import { ActivityManager } from "@/components/activity-manager"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Activity } from "lucide-react"
+import { HomeClient } from "@/components/home-client"
 
 export default async function Home() {
   const supabase = await createClient()
@@ -20,10 +22,12 @@ export default async function Home() {
     redirect("/auth/login")
   }
 
-  const [currentActivity, stats, topActivities] = await Promise.all([
+  const [currentActivity, stats, topActivities, recentActivities, recentMessages] = await Promise.all([
     getCurrentActivity(),
     getActivityStats(7),
     getTopActivities(5),
+    getRecentActivities(20),
+    getRecentMessages(20),
   ])
 
   return (
@@ -50,33 +54,13 @@ export default async function Home() {
       </header>
 
       <main className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          <CurrentActivityDisplay initialActivity={currentActivity} />
-
-          <Tabs defaultValue="chat" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="chat">Chat</TabsTrigger>
-              <TabsTrigger value="activities">Activities</TabsTrigger>
-              <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="chat">
-              <Card>
-                <CardContent className="p-4">
-                  <ActivityChat topActivities={topActivities} hasCurrentActivity={currentActivity !== null} />
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="activities">
-              <ActivityManager />
-            </TabsContent>
-
-            <TabsContent value="analytics">
-              <ActivityAnalytics stats={stats} />
-            </TabsContent>
-          </Tabs>
-        </div>
+        <HomeClient 
+          currentActivity={currentActivity}
+          stats={stats}
+          topActivities={topActivities}
+          recentActivities={recentActivities}
+          recentMessages={recentMessages}
+        />
       </main>
     </div>
   )

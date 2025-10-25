@@ -6,11 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Send, Loader2, Check, X } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useState } from "react"
 import { getRecentMessages, type ChatMessage } from "@/lib/message-service-client"
 import { createClient } from "@/lib/supabase/client"
 import { useClientOnly } from "@/lib/hooks/use-client-only"
-import { QuickActions } from "@/components/quick-actions"
 
 // Helper function to get current user ID
 async function getCurrentUserId(): Promise<string> {
@@ -33,13 +32,12 @@ async function getCurrentUserId(): Promise<string> {
 
 interface ActivityChatProps {
   onActivityChange?: () => void
-  topActivities: string[]
-  hasCurrentActivity: boolean
+  initialMessages?: ChatMessage[]
 }
 
-export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivity }: ActivityChatProps) {
+export function ActivityChat({ onActivityChange, initialMessages }: ActivityChatProps) {
   const [input, setInput] = useState("")
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages || [])
   const [isLoading, setIsLoading] = useState(false)
   const [pendingConfirmation, setPendingConfirmation] = useState<{
     messageId: string
@@ -47,45 +45,50 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
     data: any
   } | null>(null)
   const isClient = useClientOnly()
-  const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Load recent messages on component mount
+  // Load recent messages on component mount (only if no initial messages)
   useEffect(() => {
     if (!isClient) return
 
-    const loadMessages = async () => {
-      try {
-        const recentMessages = await getRecentMessages(20)
-        setMessages(recentMessages)
-      } catch (error) {
-        console.error("Error loading messages:", error)
+    // Only load if we don't have initial messages
+    if (!initialMessages) {
+      const loadMessages = async () => {
+        try {
+          const recentMessages = await getRecentMessages(20)
+          setMessages(recentMessages)
+        } catch (error) {
+          console.error("Error loading messages:", error)
+        }
       }
+      loadMessages()
     }
-    loadMessages()
-  }, [isClient])
+  }, [isClient, initialMessages])
 
-  // Poll for new messages every 3 seconds to get n8n responses
+  // Poll for new messages every 3 seconds to get n8n responses (only if we have initial messages)
   useEffect(() => {
-    if (!isClient) return
+    if (!isClient || !initialMessages) return
 
     const interval = setInterval(async () => {
       try {
         const recentMessages = await getRecentMessages(20)
-        setMessages(recentMessages)
+        // Only update if there are actually new messages
+        if (recentMessages.length !== messages.length) {
+          setMessages(recentMessages)
+        }
       } catch (error) {
         console.error("Error polling messages:", error)
       }
     }, 3000) // Poll every 3 seconds
 
     return () => clearInterval(interval)
-  }, [isClient])
+  }, [isClient, initialMessages, messages.length])
 
   // Trigger refresh when messages change
   useEffect(() => {
     if (messages.length > 0) {
       onActivityChange?.()
     }
-  }, [messages.length, onActivityChange])
+  }, [messages.length]) // Removed onActivityChange from dependencies
 
   // Check for confirmation requests when messages change
   useEffect(() => {
@@ -96,16 +99,19 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
       const action = lastMessage.metadata.action
       if (
         (action === "edit_activities" || action === "delete_activities") &&
-        lastMessage.content.includes("Would you like to")
+        lastMessage.content.includes("Would you like")
       ) {
         setPendingConfirmation({
           messageId: lastMessage.id,
           action: action,
           data: lastMessage.metadata,
         })
+      } else {
+        // Clear pending confirmation if it's not a confirmation request
+        setPendingConfirmation(null)
       }
     }
-  }, [messages, isClient])
+  }, [messages, isClient]) // Watch the full messages array to get proper updates
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -138,6 +144,7 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
         body: JSON.stringify({
           message: userMessage,
           user_id: userId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })
 
@@ -145,9 +152,15 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
         throw new Error("Failed to send message")
       }
 
+      // Wait a bit to ensure database operations complete
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
       // Reload messages to get AI responses
       const recentMessages = await getRecentMessages(20)
       setMessages(recentMessages)
+      
+      // Trigger activity change to refresh current activity display
+      onActivityChange?.()
     } catch (error) {
       console.error("Error sending message:", error)
       // Remove the temporary user message on error
@@ -173,6 +186,7 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
         body: JSON.stringify({
           message: confirmed ? "yes" : "no",
           user_id: userId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })
 
@@ -180,9 +194,15 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
         throw new Error("Failed to send confirmation")
       }
 
+      // Wait a bit to ensure database operations complete
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
       // Reload messages to get AI responses
       const recentMessages = await getRecentMessages(20)
       setMessages(recentMessages)
+      
+      // Trigger activity change to refresh current activity display
+      onActivityChange?.()
     } catch (error) {
       console.error("Error sending confirmation:", error)
     } finally {
@@ -206,7 +226,8 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex flex-col h-[500px]">
-        <div className="flex-1 overflow-y-auto space-y-4 p-4">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-4 flex flex-col justify-end min-h-full">
           {messages.length === 0 && (
             <Card className="border-dashed">
               <CardContent className="py-8">
@@ -272,34 +293,22 @@ export function ActivityChat({ onActivityChange, topActivities, hasCurrentActivi
               </div>
             </div>
           )}
-          <div ref={messagesEndRef} />
+          </div>
         </div>
         <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-t">
-          <div className="relative flex-1">
-            <Input
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Start work activity"
-              disabled={isLoading}
-              className="w-full"
-            />
-            {!input && (
-              <div className="absolute inset-0 flex items-center px-3 pointer-events-none">
-                <span className="text-muted-foreground/40 text-sm">Start work activity</span>
-              </div>
-            )}
-          </div>
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="Start work activity"
+            disabled={isLoading}
+            className="flex-1"
+          />
           <Button type="submit" disabled={isLoading || !input.trim()} size="icon">
             <Send className="h-4 w-4" />
           </Button>
         </form>
       </div>
 
-      <QuickActions
-        topActivities={topActivities}
-        hasCurrentActivity={hasCurrentActivity}
-        onActivityChange={onActivityChange}
-      />
     </div>
   )
 }

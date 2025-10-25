@@ -26,19 +26,21 @@ export async function getRecentMessages(limit = 50): Promise<ChatMessage[]> {
 
     if (!user) return []
 
+    // Get all messages, then take the last 'limit' messages sorted by timestamp
     const { data, error } = await supabase
       .from("messages")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: false })
-      .limit(limit)
+      .order("created_at", { ascending: true })
 
     if (error) {
       console.error("Error fetching messages:", error)
       return []
     }
 
-    return (data || []).reverse() // Reverse to show oldest first
+    // Take only the last 'limit' messages (most recent)
+    const allMessages = data || []
+    return allMessages.slice(-limit)
   } catch (error) {
     console.error("Error in getRecentMessages:", error)
     return []

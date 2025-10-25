@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
 import { BedrockRuntimeClient, ConverseCommand } from "@aws-sdk/client-bedrock-runtime"
 import { queryActivities, updateActivity, deleteActivity } from "@/lib/activity-edit-service"
+import { convertAIResponseTimesToUTC, convertToLocalTime } from "@/lib/timezone-utils"
 
 export const maxDuration = 30
 
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     console.log("Request body received:", JSON.stringify(body, null, 2))
     
-    const { message, user_id } = body
+    const { message, user_id, timezone } = body
     
     if (!message || !user_id) {
       return NextResponse.json({ 
@@ -46,13 +47,21 @@ export async function POST(req: NextRequest) {
     
     let aiResponse
     if (isConfirmation) {
-      // Handle confirmation - this would need to be stored in session/database
-      // For now, we'll simulate the confirmation flow
-      aiResponse = await handleConfirmation(message, user_id)
+    // Handle confirmation - this would need to be stored in session/database
+    // For now, we'll simulate the confirmation flow
+    aiResponse = await handleConfirmation(message, user_id)
+    
+    // Convert AI response times to UTC based on user timezone
+    const userTimezone = timezone || 'UTC'
+    aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
     } else {
-      // Call AI to parse the message
-      aiResponse = await callAIForProductivityParsing(message, user_id)
+      // Let AI decide whether to use tools or not
+      aiResponse = await callAIForProductivityParsing(message, user_id, timezone)
       console.log("AI Response:", aiResponse)
+      
+      // Convert AI response times to UTC based on user timezone
+      const userTimezone = timezone || 'UTC'
+      aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
     }
 
     // Process the AI response
@@ -97,37 +106,44 @@ export async function POST(req: NextRequest) {
   }
 }
 
-async function callAIForProductivityParsing(userMessage: string, userId: string): Promise<{
+async function callAIForProductivityParsing(userMessage: string, userId: string, timezone?: string): Promise<{
   action: string;
   outputMessage: string;
   activityId: string | null;
   aiJsonData: any;
 }> {
+  const userTimezone = timezone || 'UTC'
+  const currentTime = new Date().toISOString()
+  
   const systemPrompt = `You are a productivity tracking assistant.
 
 MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON. No extra text or markdown.
 
-Current time: ${new Date().toISOString()}
+User ID: ${userId}
+User timezone: ${userTimezone}
+Current time (UTC): ${currentTime}
 
-For realtime tracking: {"action": "start_activity", "activity": "Work", "timestamp": "${new Date().toISOString()}", "outputMessage":<Generate your own/>}
-For stopping realtime tracking: {"action": "stop_activity", "outputMessage":<Generate your own/>}
-For adding past events: {"action": "log_past", "entries": [{"activity": "Transit", "start": "2024-01-15T08:00:00Z", "end": "2024-01-15T09:00:00Z"}], "outputMessage":<Generate your own/>}
-If you are unsure: {"action": "unsure", "outputMessage":<Generate your own/>}
+<Tools>
+- convert_to_local_time: Converts any timestamp to user's local timezone. Pass timestamp and timezone. Returns local time as ISO string without 'Z'.
+</>
 
-For the edit and delete activities you should first use the get_many_rows tool and evaluate from the results which items the user would like to edit or delete. This is a confirmation. The user will only see outputMessage so put your answer there.
+<Rules>
+- For start, stop: respond directly with JSON - DO NOT use tools
+- For log_past: use convert_to_local_time first to get current time in user's timezone, then interpret user's relative times (e.g., "7am to 8am") and return local timestamps
+- All timestamps in JSON responses must be in local time format WITHOUT 'Z' suffix (e.g., "2024-01-15T19:30:00")
+</>
 
-IMPORTANT: When editing activities, you MUST parse the user's requested times and convert them to proper ISO timestamps. Do NOT use the original database times - use the NEW times the user requested.
+For realtime tracking: {"action": "start_activity", "activity": "Work", "timestamp": "<local time ISO string>", "outputMessage": "Started tracking Work"}
 
-Time parsing examples:
-- "8pm to 9pm" → started_at: "2025-01-18T20:00:00Z", ended_at: "2025-01-18T21:00:00Z"
-- "2pm to 3pm" → started_at: "2025-01-18T14:00:00Z", ended_at: "2025-01-18T15:00:00Z"
-- "10am to 11am" → started_at: "2025-01-18T10:00:00Z", ended_at: "2025-01-18T11:00:00Z"
+For stopping: {"action": "stop_activity", "outputMessage": "Stopped activity"}
 
-{"action": "edit_activities", "updates": [{"activity_id": <id from db>, "activity_name": <activity_name from db>, "started_at": <NEW start time as ISO string>, "ended_at": <NEW end time as ISO string>}], "outputMessage": "From your request, I found the <activity_name from db> session from <started_at from db> to <ended_at from db>. Would you like to update this to <from user input> until <from user input>?"}
+For past events:
+1. Use convert_to_local_time with current UTC time (${currentTime}) and timezone (${userTimezone}) to get current local time
+2. Interpret user's time references relative to that local time
+3. Return: {"action": "log_past", "entries": [{"activity": "Transit", "start": "<local time ISO>", "end": "<local time ISO>"}], "outputMessage": "Logged Transit from X to Y"}
 
-{"action": "delete_activities", "activity_ids": [<matched id1 from db>, <matched_id2 from db>], "outputMessage": "From your request, I found the <matched activity_name from db> sessions starting at <matched started_at1>, <matched started_at2>, ... Would you like to delete these?"}
-
-Parse this user input: "${userMessage}"`
+If unsure: {"action": "unsure", "outputMessage": "Can you clarify..."}
+`
 
   try {
     // AWS Bedrock configuration
@@ -142,7 +158,7 @@ Parse this user input: "${userMessage}"`
       }
     })
 
-    console.log("🤖 Calling Bedrock Converse API with get_many_rows tool...")
+    console.log("🤖 Calling Bedrock Converse API...")
     
     const command = new ConverseCommand({
       modelId: modelId,
@@ -178,21 +194,157 @@ Parse this user input: "${userMessage}"`
                 }
               }
             }
+          },
+          {
+            toolSpec: {
+              name: "get_user_time",
+              description: "Get current time in user's timezone for friendly display",
+              inputSchema: {
+                json: {
+                  type: "object",
+                  properties: {
+                    timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
+                  },
+                  required: ["timezone"]
+                }
+              }
+            }
+          },
+          {
+            toolSpec: {
+              name: "convert_to_local_time",
+              description: "Convert any timestamp (UTC or local) to user's local timezone as ISO string",
+              inputSchema: {
+                json: {
+                  type: "object",
+                  properties: {
+                    timestamp: { type: "string", description: "Timestamp to convert (e.g., '2024-01-15T14:00:00Z' or '2024-01-15T19:30:00')" },
+                    timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
+                  },
+                  required: ["timestamp", "timezone"]
+                }
+              }
+            }
           }
         ]
       }
     })
 
-    const response = await client.send(command)
+    let response = await client.send(command)
     console.log("🔍 Bedrock Converse Response:", JSON.stringify(response, null, 2))
 
-    // Process the response
+    // Continue conversation until we get a final response (not tool_use)
+    const conversationMessages: any[] = [
+      {
+        role: "user",
+        content: [{ text: `${systemPrompt}\n\nUser input: ${userMessage}` }]
+      }
+    ]
+    
+    let maxIterations = 5
+    let iterations = 0
+    
+    while (response.stopReason === 'tool_use' && iterations < maxIterations) {
+      iterations++
+      console.log(`🔄 Tool use iteration ${iterations}`)
+      
+      // Collect all tool uses and their results from this response
+      const assistantContent: any[] = []
+      const toolResults: any[] = []
+      
+      if (response.output?.message?.content) {
+        for (const content of response.output.message.content) {
+          assistantContent.push(content)
+          
+          if (content.toolUse) {
+            console.log("🔧 Tool use detected:", content.toolUse)
+            let toolResult = null
+            
+            if (content.toolUse.name === "get_many_rows") {
+              toolResult = await handleGetManyRowsTool(content.toolUse, userId)
+            } else if (content.toolUse.name === "get_user_time") {
+              toolResult = await handleGetUserTimeTool(content.toolUse, timezone || 'UTC')
+            } else if (content.toolUse.name === "convert_to_local_time") {
+              toolResult = await handleConvertToLocalTimeTool(content.toolUse, timezone || 'UTC')
+            }
+            
+            if (toolResult) {
+              toolResults.push({
+                toolResult: {
+                  toolUseId: content.toolUse.toolUseId,
+                  content: [{ text: JSON.stringify(toolResult) }]
+                }
+              })
+            }
+          }
+        }
+      }
+      
+      // Add assistant message with tool uses
+      conversationMessages.push({
+        role: "assistant",
+        content: assistantContent
+      })
+      
+      // Add user message with tool results
+      conversationMessages.push({
+        role: "user",
+        content: toolResults
+      })
+      
+      // Make next call with conversation history
+      const nextCommand = new ConverseCommand({
+        modelId: modelId,
+        messages: conversationMessages,
+        system: [{ text: systemPrompt }],
+        toolConfig: {
+          tools: [
+            {
+              toolSpec: {
+                name: "get_many_rows",
+                description: "Get activities from the database for a user by activity name",
+                inputSchema: {
+                  json: {
+                    type: "object",
+                    properties: {
+                      user_id: { type: "string", description: "User ID to query activities for" },
+                      activity_name: { type: "string", description: "Name of the activity to search for" }
+                    },
+                    required: ["user_id", "activity_name"]
+                  }
+                }
+              }
+            },
+            {
+              toolSpec: {
+                name: "get_user_time",
+                description: "Get current time in user's timezone for friendly display",
+                inputSchema: {
+                  json: {
+                    type: "object",
+                    properties: {
+                      timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
+                    },
+                    required: ["timezone"]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      })
+      
+      response = await client.send(nextCommand)
+      console.log(`🔍 Iteration ${iterations} Response:`, JSON.stringify(response, null, 2))
+    }
+
+    // Process the final response
     let finalMessage = ""
     let action = "unsure"
     let activityId = null
     let aiJsonData = null
 
-    // Handle text content
+    // Extract text content from final response
     if (response.output?.message?.content) {
       for (const content of response.output.message.content) {
         if (content.text) {
@@ -201,108 +353,31 @@ Parse this user input: "${userMessage}"`
       }
     }
 
-    // Handle tool use
-    if (response.output?.message?.content) {
-      for (const content of response.output.message.content) {
-        if (content.toolUse) {
-          console.log("🔧 Tool use detected:", content.toolUse)
-          const toolResult = await handleGetManyRowsTool(content.toolUse, userId)
-          if (toolResult) {
-            // Make a second Converse call with the tool result
-            const secondCommand = new ConverseCommand({
-              modelId: modelId,
-              messages: [
-                {
-                  role: "user",
-                  content: [
-                    {
-                      text: `${systemPrompt}\n\nUser input: ${userMessage}`
-                    }
-                  ]
-                },
-                {
-                  role: "assistant",
-                  content: [
-                    {
-                      toolUse: content.toolUse
-                    }
-                  ]
-                },
-                {
-                  role: "user",
-                  content: [
-                    {
-                      toolResult: {
-                        toolUseId: content.toolUse.toolUseId,
-                        content: [
-                          {
-                            text: JSON.stringify(toolResult)
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              ],
-              system: [
-                {
-                  text: systemPrompt
-                }
-              ],
-              toolConfig: {
-                tools: [
-                  {
-                    toolSpec: {
-                      name: "get_many_rows",
-                      description: "Get activities from the database for a user by activity name",
-                      inputSchema: {
-                        json: {
-                          type: "object",
-                          properties: {
-                            user_id: { type: "string", description: "User ID to query activities for" },
-                            activity_name: { type: "string", description: "Name of the activity to search for" }
-                          },
-                          required: ["user_id", "activity_name"]
-                        }
-                      }
-                    }
-                  }
-                ]
-              }
-            })
-
-            const secondResponse = await client.send(secondCommand)
-            console.log("🔍 Second Converse Response:", JSON.stringify(secondResponse, null, 2))
-
-            // Parse the final JSON response
-            if (secondResponse.output?.message?.content) {
-              for (const content of secondResponse.output.message.content) {
-                if (content.text) {
-                  try {
-                    const parsedJson = JSON.parse(content.text)
-                    aiJsonData = parsedJson
-                    action = parsedJson.action
-                    finalMessage = parsedJson.outputMessage || content.text
-                  } catch (e) {
-                    finalMessage = content.text
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    // If no tool was used, try to parse JSON from the first response
-    if (!aiJsonData && finalMessage) {
+    // Try to parse JSON from the final response
+    if (finalMessage) {
       try {
-        const parsedJson = JSON.parse(finalMessage)
+        let cleanedMessage = finalMessage.trim()
+        
+        // Try multiple extraction methods
+        // 1. Check if wrapped in markdown code blocks
+        const codeBlockMatch = cleanedMessage.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/)
+        if (codeBlockMatch) {
+          cleanedMessage = codeBlockMatch[1].trim()
+        }
+        
+        // 2. Try to find JSON object in the text (starts with { and ends with })
+        const jsonMatch = cleanedMessage.match(/\{[\s\S]*\}/)
+        if (jsonMatch) {
+          cleanedMessage = jsonMatch[0]
+        }
+        
+        const parsedJson = JSON.parse(cleanedMessage)
         aiJsonData = parsedJson
         action = parsedJson.action
         finalMessage = parsedJson.outputMessage || finalMessage
       } catch (e) {
         // Not JSON, use the text as is
+        console.warn("Failed to parse AI response as JSON:", e)
       }
     }
 
@@ -319,7 +394,7 @@ Parse this user input: "${userMessage}"`
     // Handle throttling with retry logic
     if (error instanceof Error && error.message.includes('ThrottlingException')) {
       console.log("🔄 Throttling detected, retrying with backoff...")
-      return await retryWithBackoff(() => callAIForProductivityParsing(userMessage, userId), 3)
+      return await retryWithBackoff(() => callAIForProductivityParsing(userMessage, userId, timezone), 3)
     }
 
     return {
@@ -333,19 +408,22 @@ Parse this user input: "${userMessage}"`
 
 
 async function processAIResponse(supabase: any, user_id: string, aiResponse: any) {
-  const { action } = aiResponse
+  const { action, aiJsonData } = aiResponse
+  
+  // Use aiJsonData if available, otherwise fall back to aiResponse itself
+  const dataToProcess = aiJsonData || aiResponse
 
   switch (action) {
     case "start_activity":
-      return await handleStartActivity(supabase, user_id, aiResponse)
+      return await handleStartActivity(supabase, user_id, dataToProcess)
     case "stop_activity":
       return await handleStopActivity(supabase, user_id)
     case "log_past":
-      return await handleLogPast(supabase, user_id, aiResponse)
+      return await handleLogPast(supabase, user_id, dataToProcess)
     case "edit_activities":
-      return await handleEditActivities(supabase, user_id, aiResponse)
+      return await handleEditActivities(supabase, user_id, dataToProcess)
     case "delete_activities":
-      return await handleDeleteActivities(supabase, user_id, aiResponse)
+      return await handleDeleteActivities(supabase, user_id, dataToProcess)
     case "unsure":
       return { success: true, message: "No action taken" }
     default:
@@ -430,8 +508,8 @@ async function handleLogPast(supabase: any, user_id: string, aiResponse: any) {
       .rpc('insert_n8n_activity', {
         p_user_id: user_id,
         p_activity_name: entry.activity,
-        p_started_at: startTime.toISOString(),
-        p_ended_at: endTime.toISOString(),
+        p_started_at: entry.start,
+        p_ended_at: entry.end,
         p_duration_minutes: durationMinutes,
       })
 
@@ -533,6 +611,78 @@ async function handleGetManyRowsTool(toolUse: any, userId: string) {
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'
+    }
+  }
+}
+
+
+// Handle get_user_time tool call
+async function handleGetUserTimeTool(toolUse: any, timezone: string) {
+  console.log("🔧 Handling get_user_time tool call:", toolUse)
+  
+  const { input } = toolUse
+  
+  try {
+    const { timezone: requestedTimezone } = input
+    
+    const userTimezone = requestedTimezone || timezone || 'UTC'
+    const now = new Date()
+    
+    // Format time in user's timezone
+    const localTime = now.toLocaleString('en-US', {
+      timeZone: userTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    })
+    
+    return {
+      success: true,
+      timezone: userTimezone,
+      localTime: localTime,
+      utcTime: now.toISOString()
+    }
+  } catch (error) {
+    console.error("❌ Error in get_user_time tool:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      timezone: timezone || 'UTC',
+      localTime: new Date().toLocaleString(),
+      utcTime: new Date().toISOString()
+    }
+  }
+}
+
+// Handle convert_to_local_time tool call
+async function handleConvertToLocalTimeTool(toolUse: any, timezone: string) {
+  console.log("🔧 Handling convert_to_local_time tool call:", toolUse)
+  
+  const { input } = toolUse
+  
+  try {
+    const { timestamp, timezone: requestedTimezone } = input
+    const userTimezone = requestedTimezone || timezone || 'UTC'
+    
+    const localTime = convertToLocalTime(timestamp, userTimezone)
+    
+    return {
+      success: true,
+      originalTimestamp: timestamp,
+      localTime: localTime,
+      timezone: userTimezone
+    }
+  } catch (error) {
+    console.error("❌ Error in convert_to_local_time tool:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      originalTimestamp: input.timestamp,
+      timezone: timezone || 'UTC'
     }
   }
 }
