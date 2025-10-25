@@ -1,5 +1,6 @@
 "use client"
 
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Cell } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
@@ -8,6 +9,7 @@ import { Clock, TrendingUp, BarChart3 } from "lucide-react"
 
 interface ActivityAnalyticsProps {
   stats: ActivityStats[]
+  refreshTrigger?: number
 }
 
 const COLORS = [
@@ -18,19 +20,39 @@ const COLORS = [
   "hsl(var(--chart-5))",
 ]
 
-export function ActivityAnalytics({ stats }: ActivityAnalyticsProps) {
-  const totalMinutes = stats.reduce((sum, stat) => sum + stat.total_minutes, 0)
+export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsProps) {
+  const [currentStats, setCurrentStats] = useState(stats)
+  
+  // Refresh stats when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      const loadStats = async () => {
+        try {
+          const response = await fetch("/api/activities?stats=true")
+          const data = await response.json()
+          if (data.success) {
+            setCurrentStats(data.stats)
+          }
+        } catch (error) {
+          console.error("Error loading stats:", error)
+        }
+      }
+      loadStats()
+    }
+  }, [refreshTrigger])
+
+  const totalMinutes = currentStats.reduce((sum, stat) => sum + stat.total_minutes, 0)
   const totalHours = Math.floor(totalMinutes / 60)
   const remainingMinutes = totalMinutes % 60
 
-  const chartData = stats.map((stat) => ({
+  const chartData = currentStats.map((stat) => ({
     name: stat.activity_name,
     minutes: stat.total_minutes,
     hours: (stat.total_minutes / 60).toFixed(1),
     sessions: stat.session_count,
   }))
 
-  if (stats.length === 0) {
+  if (currentStats.length === 0) {
     return (
       <Card className="border-dashed">
         <CardContent className="flex items-center justify-center py-12">

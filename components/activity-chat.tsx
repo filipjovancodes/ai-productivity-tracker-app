@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { Send, Loader2, Check, X } from "lucide-react"
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { getRecentMessages, type ChatMessage } from "@/lib/message-service-client"
 import { createClient } from "@/lib/supabase/client"
 import { useClientOnly } from "@/lib/hooks/use-client-only"
@@ -45,6 +45,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     data: any
   } | null>(null)
   const isClient = useClientOnly()
+  const messagesEndRef = useRef<HTMLDivElement>(null)
 
   // Load recent messages on component mount (only if no initial messages)
   useEffect(() => {
@@ -90,7 +91,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     }
   }, [messages.length]) // Removed onActivityChange from dependencies
 
-  // Check for confirmation requests when messages change
+  // Check for confirmation requests when messages change and auto-scroll
   useEffect(() => {
     if (!isClient || messages.length === 0) return
 
@@ -111,6 +112,11 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
         setPendingConfirmation(null)
       }
     }
+    
+    // Auto-scroll to bottom when new messages arrive
+    setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }, 100)
   }, [messages, isClient]) // Watch the full messages array to get proper updates
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -226,7 +232,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   return (
     <div className="flex flex-col space-y-4">
       <div className="flex flex-col h-[500px]">
-        <div className="flex-1 overflow-y-auto p-4">
+        <div className="flex-1 overflow-y-auto p-4" data-messages-container>
           <div className="space-y-4 flex flex-col justify-end min-h-full">
           {messages.length === 0 && (
             <Card className="border-dashed">
@@ -293,6 +299,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
               </div>
             </div>
           )}
+          <div ref={messagesEndRef} />
           </div>
         </div>
         <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-t">

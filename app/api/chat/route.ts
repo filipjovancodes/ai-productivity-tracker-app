@@ -61,7 +61,9 @@ export async function POST(req: NextRequest) {
       
       // Convert AI response times to UTC based on user timezone
       const userTimezone = timezone || 'UTC'
+      console.log('Before conversion:', aiResponse)
       aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
+      console.log('After conversion:', aiResponse)
     }
 
     // Process the AI response
@@ -128,12 +130,13 @@ Current time (UTC): ${currentTime}
 </>
 
 <Rules>
-- For start, stop: respond directly with JSON - DO NOT use tools
+- For start: return JSON with current UTC timestamp (use ${currentTime})
+- For stop: respond directly with JSON - DO NOT use tools
 - For log_past: use convert_to_local_time first to get current time in user's timezone, then interpret user's relative times (e.g., "7am to 8am") and return local timestamps
-- All timestamps in JSON responses must be in local time format WITHOUT 'Z' suffix (e.g., "2024-01-15T19:30:00")
+- All timestamps in JSON responses must be in UTC format WITH 'Z' suffix (e.g., "2024-01-15T19:30:00Z")
 </>
 
-For realtime tracking: {"action": "start_activity", "activity": "Work", "timestamp": "<local time ISO string>", "outputMessage": "Started tracking Work"}
+For realtime tracking: {"action": "start_activity", "activity": "Work", "timestamp": "${currentTime}", "outputMessage": "Started tracking Work"}
 
 For stopping: {"action": "stop_activity", "outputMessage": "Stopped activity"}
 

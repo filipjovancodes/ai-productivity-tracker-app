@@ -33,9 +33,10 @@ import type { Activity } from "@/lib/types"
 interface ActivityManagerProps {
   onActivityChange?: () => void
   initialActivities?: Activity[]
+  refreshTrigger?: number
 }
 
-export function ActivityManager({ onActivityChange, initialActivities }: ActivityManagerProps) {
+export function ActivityManager({ onActivityChange, initialActivities, refreshTrigger }: ActivityManagerProps) {
   const [activities, setActivities] = useState<Activity[]>(initialActivities || [])
   const [loading, setLoading] = useState(!initialActivities)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
@@ -53,6 +54,13 @@ export function ActivityManager({ onActivityChange, initialActivities }: Activit
       loadActivities()
     }
   }, [initialActivities])
+
+  // Refresh activities when refreshTrigger changes
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0) {
+      loadActivities()
+    }
+  }, [refreshTrigger])
 
   const loadActivities = async () => {
     try {

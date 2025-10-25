@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useRef } from "react"
 import { CardContent } from "@/components/ui/card"
 import { CurrentActivityDisplay } from "@/components/current-activity-display"
 import { ActivityChat } from "@/components/activity-chat"
@@ -27,9 +27,22 @@ export function HomeClient({
   recentMessages 
 }: HomeClientProps) {
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+  const chatRef = useRef<HTMLDivElement>(null)
 
   const handleActivityChange = useCallback(() => {
     setRefreshTrigger(prev => prev + 1)
+  }, [])
+
+  const handleChatTabClick = useCallback(() => {
+    // Scroll to bottom when chat tab is clicked
+    setTimeout(() => {
+      if (chatRef.current) {
+        const messagesContainer = chatRef.current.querySelector('[data-messages-container]')
+        if (messagesContainer) {
+          messagesContainer.scrollTop = messagesContainer.scrollHeight
+        }
+      }
+    }, 100)
   }, [])
 
   return (
@@ -43,12 +56,12 @@ export function HomeClient({
 
       <Tabs defaultValue="chat" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="chat">Chat</TabsTrigger>
+          <TabsTrigger value="chat" onClick={handleChatTabClick}>Chat</TabsTrigger>
           <TabsTrigger value="activities">Activities</TabsTrigger>
           <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="chat">
+        <TabsContent value="chat" ref={chatRef}>
           <Card>
             <CardContent className="p-4">
               <ActivityChat 
@@ -63,11 +76,12 @@ export function HomeClient({
           <ActivityManager 
             initialActivities={recentActivities}
             onActivityChange={handleActivityChange}
+            refreshTrigger={refreshTrigger}
           />
         </TabsContent>
 
         <TabsContent value="analytics">
-          <ActivityAnalytics stats={stats} />
+          <ActivityAnalytics stats={stats} refreshTrigger={refreshTrigger} />
         </TabsContent>
       </Tabs>
     </div>

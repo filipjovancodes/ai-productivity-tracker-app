@@ -101,23 +101,9 @@ export function formatUTCToLocal(
  */
 export function convertLocalISOToUTC(localTimestamp: string, userTimezone: string): string {
   try {
-    // Parse the local timestamp as if it's in the user's timezone
-    // We create a date string that explicitly states it's in UTC, but represents the local time
-    const localDateStr = localTimestamp.replace('T', ' ')
+    console.log(`Converting local timestamp: ${localTimestamp} in timezone: ${userTimezone}`)
     
-    // Use Intl to parse the local time in the user's timezone
-    const formatter = new Intl.DateTimeFormat('en-US', {
-      timeZone: userTimezone,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false
-    })
-    
-    // Parse the components from the local timestamp
+    // Parse the local timestamp components
     const match = localTimestamp.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})/)
     if (!match) {
       throw new Error(`Invalid timestamp format: ${localTimestamp}`)
@@ -125,33 +111,25 @@ export function convertLocalISOToUTC(localTimestamp: string, userTimezone: strin
     
     const [, year, month, day, hour, minute, second] = match
     
-    // Create a date string in the format that Date.toLocaleString uses
-    const localDateInUserTZ = `${month}/${day}/${year}, ${hour}:${minute}:${second}`
+    // Create a date object representing the local time
+    const localDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`)
+    console.log(`Local date created: ${localDate.toISOString()}`)
     
-    // Get the UTC offset by comparing the same timestamp interpreted as UTC vs local
-    const testDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}Z`)
-    const localParts = formatter.formatToParts(testDate)
+    // Get the timezone offset by comparing what the same time would be in UTC vs the user's timezone
+    const utcTime = new Date(localDate.toLocaleString('en-US', { timeZone: 'UTC' }))
+    const localTimeInTZ = new Date(localDate.toLocaleString('en-US', { timeZone: userTimezone }))
     
-    // Build the date in user's timezone
-    const partsMap: Record<string, string> = {}
-    for (const part of localParts) {
-      if (part.type !== 'literal') {
-        partsMap[part.type] = part.value
-      }
-    }
+    console.log(`UTC time: ${utcTime.toISOString()}, Local time in TZ: ${localTimeInTZ.toISOString()}`)
     
-    // Now create a Date object that represents this local time as if it were UTC
-    const utcString = `${year}-${month}-${day}T${hour}:${minute}:${second}Z`
-    const asIfUTC = new Date(utcString)
+    // Calculate the offset
+    const offset = utcTime.getTime() - localTimeInTZ.getTime()
+    console.log(`Offset: ${offset}ms`)
     
-    // Create the same time but interpreted in the user's timezone
-    const inUserTZ = new Date(asIfUTC.toLocaleString('en-US', { timeZone: userTimezone }))
+    // Apply the offset to get the UTC time
+    const utcResult = new Date(localDate.getTime() + offset)
+    console.log(`Final UTC result: ${utcResult.toISOString()}`)
     
-    // Calculate the offset and adjust
-    const offset = asIfUTC.getTime() - inUserTZ.getTime()
-    const utcDate = new Date(asIfUTC.getTime() + offset)
-    
-    return utcDate.toISOString()
+    return utcResult.toISOString()
   } catch (error) {
     console.error('Error converting local ISO to UTC:', error, localTimestamp)
     // Fallback: assume it's already UTC
@@ -227,16 +205,14 @@ function parseTimeString(timeString: string): { hours: number; minutes: number }
  * @returns Updated AI response with UTC times
  */
 export function convertAIResponseTimesToUTC(aiResponse: any, userTimezone: string): any {
+  console.log('convertAIResponseTimesToUTC called with:', { action: aiResponse.action, timestamp: aiResponse.timestamp, userTimezone })
+  
   if (!aiResponse || !userTimezone) return aiResponse
 
-  // Handle start_activity action
-  if (aiResponse.action === 'start_activity' && aiResponse.timestamp) {
-    if (typeof aiResponse.timestamp === 'string' && !aiResponse.timestamp.endsWith('Z')) {
-      return {
-        ...aiResponse,
-        timestamp: convertLocalISOToUTC(aiResponse.timestamp, userTimezone)
-      }
-    }
+  // Handle start_activity action - don't convert, AI should return UTC directly
+  if (aiResponse.action === 'start_activity') {
+    console.log('start_activity detected - no conversion needed, AI should return UTC')
+    return aiResponse
   }
 
   // Handle edit_activities action
