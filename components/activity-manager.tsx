@@ -156,9 +156,10 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
   }
 
   const formatDuration = (minutes: number | null) => {
-    if (!minutes) return "N/A"
+    if (minutes === null || minutes === undefined) return "N/A"
+    if (minutes === 0) return "0m"
     const hours = Math.floor(minutes / 60)
-    const mins = minutes % 60
+    const mins = Math.floor(minutes % 60)
     return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`
   }
 

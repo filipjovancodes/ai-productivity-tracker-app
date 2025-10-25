@@ -21,17 +21,22 @@ const COLORS = [
 ]
 
 export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsProps) {
-  const [currentStats, setCurrentStats] = useState(stats)
+  const [currentStats, setCurrentStats] = useState<ActivityStats[]>(stats || [])
   
-  // Refresh stats when refreshTrigger changes
+  // Initialize with props
   useEffect(() => {
-    if (refreshTrigger && refreshTrigger > 0) {
+    setCurrentStats(stats || [])
+  }, [stats])
+  
+  // Refresh stats when refreshTrigger changes (only if we have initial stats)
+  useEffect(() => {
+    if (refreshTrigger && refreshTrigger > 0 && stats && stats.length > 0) {
       const loadStats = async () => {
         try {
           const response = await fetch("/api/activities?stats=true")
           const data = await response.json()
           if (data.success) {
-            setCurrentStats(data.stats)
+            setCurrentStats(data.stats || [])
           }
         } catch (error) {
           console.error("Error loading stats:", error)
@@ -39,20 +44,20 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
       }
       loadStats()
     }
-  }, [refreshTrigger])
+  }, [refreshTrigger, stats])
 
-  const totalMinutes = currentStats.reduce((sum, stat) => sum + stat.total_minutes, 0)
+  const totalMinutes = (currentStats || []).reduce((sum, stat) => sum + stat.total_minutes, 0)
   const totalHours = Math.floor(totalMinutes / 60)
   const remainingMinutes = totalMinutes % 60
 
-  const chartData = currentStats.map((stat) => ({
+  const chartData = (currentStats || []).map((stat) => ({
     name: stat.activity_name,
     minutes: stat.total_minutes,
     hours: (stat.total_minutes / 60).toFixed(1),
     sessions: stat.session_count,
   }))
 
-  if (currentStats.length === 0) {
+  if (!currentStats || currentStats.length === 0) {
     return (
       <Card className="border-dashed">
         <CardContent className="flex items-center justify-center py-12">
@@ -88,8 +93,8 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.reduce((sum, stat) => sum + stat.session_count, 0)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Across {stats.length} activities</p>
+            <div className="text-2xl font-bold">{(currentStats || []).reduce((sum, stat) => sum + stat.session_count, 0)}</div>
+            <p className="text-xs text-muted-foreground mt-1">Across {(currentStats || []).length} activities</p>
           </CardContent>
         </Card>
       </div>
@@ -210,7 +215,7 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
         </CardHeader>
         <CardContent>
           <div className="space-y-3">
-            {stats.map((stat, index) => {
+            {(currentStats || []).map((stat, index) => {
               const hours = Math.floor(stat.total_minutes / 60)
               const minutes = stat.total_minutes % 60
               const percentage = ((stat.total_minutes / totalMinutes) * 100).toFixed(1)

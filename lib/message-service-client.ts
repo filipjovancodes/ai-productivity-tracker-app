@@ -12,7 +12,7 @@ export interface ChatMessage {
   metadata?: any
 }
 
-export async function getRecentMessages(limit = 50): Promise<ChatMessage[]> {
+export async function getRecentMessages(limit = 50, beforeTimestamp?: string): Promise<ChatMessage[]> {
   // Prevent server-side execution
   if (typeof window === 'undefined') {
     return []
@@ -26,21 +26,27 @@ export async function getRecentMessages(limit = 50): Promise<ChatMessage[]> {
 
     if (!user) return []
 
-    // Get all messages, then take the last 'limit' messages sorted by timestamp
-    const { data, error } = await supabase
+    let query = supabase
       .from("messages")
       .select("*")
       .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
+      .order("created_at", { ascending: false })
+      .limit(limit)
+
+    // If beforeTimestamp is provided, get messages before that timestamp
+    if (beforeTimestamp) {
+      query = query.lt("created_at", beforeTimestamp)
+    }
+
+    const { data, error } = await query
 
     if (error) {
       console.error("Error fetching messages:", error)
       return []
     }
 
-    // Take only the last 'limit' messages (most recent)
-    const allMessages = data || []
-    return allMessages.slice(-limit)
+    // Return messages in chronological order (oldest first)
+    return (data || []).reverse()
   } catch (error) {
     console.error("Error in getRecentMessages:", error)
     return []

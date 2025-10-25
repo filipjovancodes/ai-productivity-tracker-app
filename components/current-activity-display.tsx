@@ -121,20 +121,22 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
 
   if (!activity) {
     return (
-      <div className="space-y-4">
-        <Card className="border-dashed">
-          <CardContent className="flex items-center justify-center py-8">
+      <Card className="border-dashed">
+        <CardContent className="py-8">
+          <div className="flex items-center justify-center mb-4">
             <p className="text-muted-foreground text-sm">No active session</p>
-          </CardContent>
-        </Card>
-        {topActivities && topActivities.length > 0 && (
-          <QuickActions
-            topActivities={topActivities}
-            hasCurrentActivity={false}
-            onActivityChange={onActivityChange}
-          />
-        )}
-      </div>
+          </div>
+          {topActivities && topActivities.length > 0 && (
+            <div className="border-t pt-4">
+              <QuickActions
+                topActivities={topActivities}
+                hasCurrentActivity={false}
+                onActivityChange={onActivityChange}
+              />
+            </div>
+          )}
+        </CardContent>
+      </Card>
     )
   }
 
@@ -143,31 +145,43 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
 
   return (
     <Card className="border-primary/50 bg-primary/5">
-      <CardContent className="flex items-center justify-between py-6">
-        <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-            <Clock className="h-5 w-5 text-primary" />
+      <CardContent className="py-6">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
+              <Clock className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-medium text-lg">{activity.activity_name}</p>
+              <p className="text-sm text-muted-foreground">Currently active</p>
+            </div>
           </div>
-          <div>
-            <p className="font-medium text-lg">{activity.activity_name}</p>
-            <p className="text-sm text-muted-foreground">Currently active</p>
+          <div className="flex items-center gap-3">
+            <Badge variant="secondary" className="text-lg font-mono px-4 py-2">
+              {hours > 0 ? `${hours}h ` : ""}
+              {minutes}m
+            </Badge>
+            <Button 
+              variant="destructive" 
+              size="sm"
+              onClick={handleStopActivity}
+              disabled={isStopping}
+            >
+              <Square className="h-4 w-4 mr-2" />
+              {isStopping ? "Stopping..." : "Stop"}
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="secondary" className="text-lg font-mono px-4 py-2">
-            {hours > 0 ? `${hours}h ` : ""}
-            {minutes}m
-          </Badge>
-          <Button 
-            variant="destructive" 
-            size="sm"
-            onClick={handleStopActivity}
-            disabled={isStopping}
-          >
-            <Square className="h-4 w-4 mr-2" />
-            {isStopping ? "Stopping..." : "Stop"}
-          </Button>
-        </div>
+        
+        {topActivities && topActivities.length > 0 && (
+          <div className="border-t pt-4">
+            <QuickActions
+              topActivities={topActivities}
+              hasCurrentActivity={true}
+              onActivityChange={onActivityChange}
+            />
+          </div>
+        )}
       </CardContent>
     </Card>
   )

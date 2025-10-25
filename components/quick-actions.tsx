@@ -68,17 +68,6 @@ export function QuickActions({ topActivities, hasCurrentActivity, onActivityChan
           </div>
         )}
 
-        {hasCurrentActivity && (
-          <Button
-            variant="destructive"
-            onClick={handleStopActivity}
-            disabled={loading !== null}
-            className="w-full mt-4"
-          >
-            <Square className="h-4 w-4 mr-2" />
-            {loading === "stop" ? "Stopping..." : "Stop Current Activity"}
-          </Button>
-        )}
       </CardContent>
     </Card>
   )
