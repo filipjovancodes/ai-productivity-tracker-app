@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Check, Zap, Crown, Star } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
-// import { SubscriptionClient } from "@/components/subscription-client"
+import { StripeCheckout } from "@/components/stripe-checkout"
 
 export default async function SubscriptionPage() {
   const supabase = await createClient()
@@ -101,7 +101,7 @@ export default async function SubscriptionPage() {
                 </CardTitle>
               </div>
               <CardDescription>For serious productivity enthusiasts</CardDescription>
-              <div className="text-3xl font-bold">$9<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-3xl font-bold">$5<span className="text-sm font-normal text-muted-foreground">/month</span></div>
             </CardHeader>
             <CardContent className="space-y-4">
               <ul className="space-y-2">
@@ -115,7 +115,7 @@ export default async function SubscriptionPage() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
-                  <span>30-day analytics</span>
+                  <span>Unlimited analytics</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
@@ -130,9 +130,9 @@ export default async function SubscriptionPage() {
                   <span>Custom activity categories</span>
                 </li>
               </ul>
-              <Button className="w-full">
-                Upgrade to Pro
-              </Button>
+              <StripeCheckout plan="pro" className="w-full">
+                Upgrade to Pro - $5/month
+              </StripeCheckout>
             </CardContent>
           </Card>
 
@@ -146,13 +146,13 @@ export default async function SubscriptionPage() {
                 </CardTitle>
               </div>
               <CardDescription>For power users and teams</CardDescription>
-              <div className="text-3xl font-bold">$19<span className="text-sm font-normal text-muted-foreground">/month</span></div>
+              <div className="text-3xl font-bold">$10<span className="text-sm font-normal text-muted-foreground">/month</span></div>
             </CardHeader>
             <CardContent className="space-y-4">
               <ul className="space-y-2">
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
-                  <span>10,000 AI messages per month</span>
+                  <span>Unlimited AI messages</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
@@ -160,7 +160,7 @@ export default async function SubscriptionPage() {
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
-                  <span>90-day analytics</span>
+                  <span>Unlimited analytics</span>
                 </li>
                 <li className="flex items-center gap-2">
                   <Check className="h-4 w-4 text-green-500" />
@@ -179,11 +179,33 @@ export default async function SubscriptionPage() {
                   <span>24/7 phone support</span>
                 </li>
               </ul>
-              <Button className="w-full" variant="outline">
-                Upgrade to Premium
-              </Button>
+              <StripeCheckout plan="premium" className="w-full" variant="outline">
+                Upgrade to Premium - $10/month
+              </StripeCheckout>
             </CardContent>
           </Card>
+        </div>
+
+        {/* Debug section for testing webhook logic */}
+        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+          <h3 className="text-lg font-semibold mb-2 text-blue-800">Test Webhook Logic</h3>
+          <p className="text-sm text-blue-700 mb-4">
+            Test the subscription creation logic without going through Stripe checkout.
+          </p>
+          <div className="flex gap-2">
+            <form action="/api/stripe/test-webhook" method="POST" className="flex-1">
+              <input type="hidden" name="plan" value="pro" />
+              <Button type="submit" variant="outline" size="sm" className="w-full">
+                Test Pro Subscription
+              </Button>
+            </form>
+            <form action="/api/stripe/test-webhook" method="POST" className="flex-1">
+              <input type="hidden" name="plan" value="premium" />
+              <Button type="submit" variant="outline" size="sm" className="w-full">
+                Test Premium Subscription
+              </Button>
+            </form>
+          </div>
         </div>
 
         <div className="mt-12 text-center">

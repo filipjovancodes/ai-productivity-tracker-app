@@ -42,6 +42,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
       
       // Get current user
       const { data: { user }, error: userError } = await supabase.auth.getUser()
+      console.log("User data:", user, "User error:", userError)
       
       if (userError || !user) {
         console.error("Error getting user:", userError)
@@ -86,7 +87,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
         console.log("Usage count:", usageCount, "Error:", usageError)
         
         const limit = subscription.plan_type === 'free' ? 30 : 
-                     subscription.plan_type === 'pro' ? 1000 : 10000
+                     subscription.plan_type === 'pro' ? 1000 : 999999
         
         setUsage({
           current_usage: usageCount || 0,
@@ -95,13 +96,48 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
           plan_type: subscription.plan_type
         })
       } else {
-        console.log("No subscription found, using default free plan")
-        setUsage({
-          current_usage: 0,
-          usage_limit: 30,
-          usage_percentage: 0,
-          plan_type: 'free'
-        })
+        console.log("No subscription found, creating free subscription automatically")
+        
+        // Automatically create a free subscription
+        try {
+          const createResponse = await fetch('/api/subscription/create-free', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          })
+          
+          const createResult = await createResponse.json()
+          
+          if (createResult.success) {
+            console.log("Free subscription created successfully")
+            // Set usage to free plan
+            setUsage({
+              current_usage: 0,
+              usage_limit: 30,
+              usage_percentage: 0,
+              plan_type: 'free'
+            })
+          } else {
+            console.error("Failed to create free subscription:", createResult.error)
+            // Fallback to free plan anyway
+            setUsage({
+              current_usage: 0,
+              usage_limit: 30,
+              usage_percentage: 0,
+              plan_type: 'free'
+            })
+          }
+        } catch (error) {
+          console.error("Error creating free subscription:", error)
+          // Fallback to free plan anyway
+          setUsage({
+            current_usage: 0,
+            usage_limit: 30,
+            usage_percentage: 0,
+            plan_type: 'free'
+          })
+        }
       }
     } catch (error) {
       console.error("Error loading usage data:", error)

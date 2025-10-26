@@ -160,7 +160,7 @@ BEGIN
   usage_limit := CASE 
     WHEN user_plan = 'free' THEN 30
     WHEN user_plan = 'pro' THEN 1000
-    WHEN user_plan = 'premium' THEN 10000
+    WHEN user_plan = 'premium' THEN 999999  -- Effectively unlimited
     ELSE 0
   END;
   
