@@ -188,7 +188,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     if (lastMessage.role === "assistant" && lastMessage.metadata?.action) {
       const action = lastMessage.metadata.action
       if (
-        (action === "edit_activities" || action === "delete_activities") &&
+        (action === "edit_activities" || action === "delete_activities" || action === "log_past") &&
         lastMessage.content.includes("Would you like")
       ) {
         setPendingConfirmation({
@@ -372,7 +372,8 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
                   {pendingConfirmation &&
                     pendingConfirmation.messageId === message.id &&
                     (message.metadata?.action === "edit_activities" ||
-                      message.metadata?.action === "delete_activities") && (
+                      message.metadata?.action === "delete_activities" ||
+                      message.metadata?.action === "log_past") && (
                       <div className="flex gap-2 mt-3">
                         <Button
                           size="sm"

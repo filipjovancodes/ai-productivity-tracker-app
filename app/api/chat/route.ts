@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     const body = await req.json()
     console.log("Request body received:", JSON.stringify(body, null, 2))
     
-    const { message, user_id, timezone } = body
+    const { message, user_id, timezone: userTimezone } = body
     
     if (!message || !user_id) {
       return NextResponse.json({ 
@@ -76,29 +76,110 @@ export async function POST(req: NextRequest) {
     
     let aiResponse
     if (isConfirmation) {
-    // Handle confirmation - this would need to be stored in session/database
-    // For now, we'll simulate the confirmation flow
-    aiResponse = await handleConfirmation(message, user_id)
-    
-    // Convert AI response times to UTC based on user timezone
-    const userTimezone = timezone || 'UTC'
-    aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
+      // Handle confirmation - retrieve stored data and execute
+      aiResponse = await handleConfirmation(message, user_id, userTimezone)
+      // aiResponse from handleConfirmation is already formatted for return
     } else {
-      // Let AI decide whether to use tools or not
-      aiResponse = await callAIForProductivityParsing(message, user_id, timezone)
-      console.log("AI Response:", aiResponse)
-      
-      // Convert AI response times to UTC based on user timezone
-      const userTimezone = timezone || 'UTC'
-      console.log('Before conversion:', aiResponse)
-      aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
-      console.log('After conversion:', aiResponse)
+      // Call AI to parse the user message
+      aiResponse = await callAIForProductivityParsing(message, user_id, userTimezone)
+      console.log("🤖 AI Response (raw):", JSON.stringify(aiResponse, null, 2))
     }
 
-    // Process the AI response
-    const result = await processAIResponse(supabase, user_id, aiResponse)
+    // Process the AI response (only for non-confirmation flows)
+    // For confirmation, handleConfirmation already processed everything
+    let result
+    if (!isConfirmation) {
+      // For log_past, DON'T convert yet - store LOCAL times for confirmation
+      // For other actions, convert times to UTC BEFORE processing
+      if (aiResponse.action === 'log_past') {
+        // Keep LOCAL times - conversion happens on confirmation
+        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
+      } else if (aiResponse.action !== 'start_activity' && aiResponse.action !== 'stop_activity' && aiResponse.action !== 'unsure') {
+        // Convert times to UTC for other actions (edit, delete, etc)
+        console.log('🔄 Converting times to UTC...')
+        console.log('Before conversion:', JSON.stringify(aiResponse, null, 2))
+        aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
+        console.log('After conversion:', JSON.stringify(aiResponse, null, 2))
+        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
+      } else {
+        // start_activity, stop_activity, unsure - no conversion needed
+        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
+      }
+    } else {
+      // For confirmation, handleConfirmation already processed everything
+      // aiResponse contains the result from handleConfirmation
+      const activityId = (aiResponse as any).activityId || ((aiResponse as any).activityIds && (aiResponse as any).activityIds[0]) || null
+      
+      const { data: aiMessageId, error: aiMessageError } = await supabase
+        .rpc('insert_n8n_message', {
+          p_user_id: user_id,
+          p_content: aiResponse.outputMessage,
+          p_activity_id: activityId,
+          p_role: 'assistant',
+          p_source: 'ai',
+          p_metadata: {
+            from_ai: true,
+            action: aiResponse.action,
+            timestamp: new Date().toISOString(),
+          }
+        })
 
-    // Store AI response message
+      if (aiMessageError) {
+        console.error("❌ Error storing AI message:", aiMessageError)
+      }
+
+      // Track usage
+      const { error: trackError } = await supabase
+        .rpc('track_usage', {
+          p_user_id: user_id,
+          p_usage_type: 'ai_message',
+          p_count: 1
+        })
+
+      if (trackError) {
+        console.error("❌ Error tracking usage:", trackError)
+      }
+
+      return NextResponse.json({
+        success: true,
+        action: aiResponse.action,
+        message: aiResponse.outputMessage
+      })
+    }
+
+    // Check if confirmation is required
+    if (result.requiresConfirmation) {
+      // Store LOCAL times (aiResponse still has LOCAL times, not converted)
+      // Conversion will happen when user confirms
+      const { data: aiMessageId, error: aiMessageError } = await supabase
+        .rpc('insert_n8n_message', {
+          p_user_id: user_id,
+          p_content: result.message,
+          p_activity_id: null,
+          p_role: 'assistant',
+          p_source: 'ai',
+          p_metadata: {
+            from_ai: true,
+            action: aiResponse.action,
+            aiJsonData: aiResponse.aiJsonData, // Store LOCAL times (not converted yet)
+            userTimezone: userTimezone, // Store timezone for later conversion
+            timestamp: new Date().toISOString(),
+          }
+        })
+
+      if (aiMessageError) {
+        console.error("❌ Error storing confirmation message:", aiMessageError)
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: result.message,
+        requiresConfirmation: true,
+        action: aiResponse.action
+      })
+    }
+
+    // Store AI response message for non-confirmation actions
     const activityId = 'activityId' in result ? result.activityId : 
                       'activityIds' in result ? result.activityIds?.[0] : null
     
@@ -163,18 +244,13 @@ async function callAIForProductivityParsing(userMessage: string, userId: string,
 MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON. No extra text or markdown.
 
 User ID: ${userId}
-User timezone: ${userTimezone}
-Current time (UTC): ${currentTime}
-
-<Tools>
-- convert_to_local_time: Converts any timestamp to user's local timezone. Pass timestamp and timezone. Returns local time as ISO string without 'Z'.
-</>
+Current time: ${currentTime}
 
 <Rules>
-- For start: return JSON with current UTC timestamp (use ${currentTime})
-- For stop: respond directly with JSON - DO NOT use tools
-- For log_past: use convert_to_local_time first to get current time in user's timezone, then interpret user's relative times (e.g., "7am to 8am") and return local timestamps
-- All timestamps in JSON responses must be in UTC format WITH 'Z' suffix (e.g., "2024-01-15T19:30:00Z")
+- For start: return JSON with current timestamp (use ${currentTime})
+- For stop: respond directly with JSON
+- For log_past: interpret user times as absolute times and create ISO timestamps
+- All timestamps should be in ISO format (e.g., "2024-10-20T09:00:00")
 </>
 
 For realtime tracking: {"action": "start_activity", "activity": "Work", "timestamp": "${currentTime}", "outputMessage": "Started tracking Work"}
@@ -182,9 +258,8 @@ For realtime tracking: {"action": "start_activity", "activity": "Work", "timesta
 For stopping: {"action": "stop_activity", "outputMessage": "Stopped activity"}
 
 For past events:
-1. Use convert_to_local_time with current UTC time (${currentTime}) and timezone (${userTimezone}) to get current local time
-2. Interpret user's time references relative to that local time
-3. Return: {"action": "log_past", "entries": [{"activity": "Transit", "start": "<local time ISO>", "end": "<local time ISO>"}], "outputMessage": "Logged Transit from X to Y"}
+When user says "9am to 5pm", create absolute timestamps:
+{"action": "log_past", "entries": [{"activity": "Work", "start": "2024-10-20T09:00:00", "end": "2024-10-20T17:00:00"}], "outputMessage": "Logged Work from 9am to 5pm"}
 
 If unsure: {"action": "unsure", "outputMessage": "Can you clarify..."}
 `
@@ -220,167 +295,13 @@ If unsure: {"action": "unsure", "outputMessage": "Can you clarify..."}
         {
           text: systemPrompt
         }
-      ],
-      toolConfig: {
-        tools: [
-          {
-            toolSpec: {
-              name: "get_many_rows",
-              description: "Get activities from the database for a user by activity name",
-              inputSchema: {
-                json: {
-                  type: "object",
-                  properties: {
-                    user_id: { type: "string", description: "User ID to query activities for" },
-                    activity_name: { type: "string", description: "Name of the activity to search for" }
-                  },
-                  required: ["user_id", "activity_name"]
-                }
-              }
-            }
-          },
-          {
-            toolSpec: {
-              name: "get_user_time",
-              description: "Get current time in user's timezone for friendly display",
-              inputSchema: {
-                json: {
-                  type: "object",
-                  properties: {
-                    timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
-                  },
-                  required: ["timezone"]
-                }
-              }
-            }
-          },
-          {
-            toolSpec: {
-              name: "convert_to_local_time",
-              description: "Convert any timestamp (UTC or local) to user's local timezone as ISO string",
-              inputSchema: {
-                json: {
-                  type: "object",
-                  properties: {
-                    timestamp: { type: "string", description: "Timestamp to convert (e.g., '2024-01-15T14:00:00Z' or '2024-01-15T19:30:00')" },
-                    timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
-                  },
-                  required: ["timestamp", "timezone"]
-                }
-              }
-            }
-          }
-        ]
-      }
+      ]
     })
 
     let response = await client.send(command)
     console.log("🔍 Bedrock Converse Response:", JSON.stringify(response, null, 2))
 
-    // Continue conversation until we get a final response (not tool_use)
-    const conversationMessages: any[] = [
-      {
-        role: "user",
-        content: [{ text: `${systemPrompt}\n\nUser input: ${userMessage}` }]
-      }
-    ]
-    
-    let maxIterations = 5
-    let iterations = 0
-    
-    while (response.stopReason === 'tool_use' && iterations < maxIterations) {
-      iterations++
-      console.log(`🔄 Tool use iteration ${iterations}`)
-      
-      // Collect all tool uses and their results from this response
-      const assistantContent: any[] = []
-      const toolResults: any[] = []
-      
-      if (response.output?.message?.content) {
-        for (const content of response.output.message.content) {
-          assistantContent.push(content)
-          
-          if (content.toolUse) {
-            console.log("🔧 Tool use detected:", content.toolUse)
-            let toolResult = null
-            
-            if (content.toolUse.name === "get_many_rows") {
-              toolResult = await handleGetManyRowsTool(content.toolUse, userId)
-            } else if (content.toolUse.name === "get_user_time") {
-              toolResult = await handleGetUserTimeTool(content.toolUse, timezone || 'UTC')
-            } else if (content.toolUse.name === "convert_to_local_time") {
-              toolResult = await handleConvertToLocalTimeTool(content.toolUse, timezone || 'UTC')
-            }
-            
-            if (toolResult) {
-              toolResults.push({
-                toolResult: {
-                  toolUseId: content.toolUse.toolUseId,
-                  content: [{ text: JSON.stringify(toolResult) }]
-                }
-              })
-            }
-          }
-        }
-      }
-      
-      // Add assistant message with tool uses
-      conversationMessages.push({
-        role: "assistant",
-        content: assistantContent
-      })
-      
-      // Add user message with tool results
-      conversationMessages.push({
-        role: "user",
-        content: toolResults
-      })
-      
-      // Make next call with conversation history
-      const nextCommand = new ConverseCommand({
-        modelId: modelId,
-        messages: conversationMessages,
-        system: [{ text: systemPrompt }],
-        toolConfig: {
-          tools: [
-            {
-              toolSpec: {
-                name: "get_many_rows",
-                description: "Get activities from the database for a user by activity name",
-                inputSchema: {
-                  json: {
-                    type: "object",
-                    properties: {
-                      user_id: { type: "string", description: "User ID to query activities for" },
-                      activity_name: { type: "string", description: "Name of the activity to search for" }
-                    },
-                    required: ["user_id", "activity_name"]
-                  }
-                }
-              }
-            },
-            {
-              toolSpec: {
-                name: "get_user_time",
-                description: "Get current time in user's timezone for friendly display",
-                inputSchema: {
-                  json: {
-                    type: "object",
-                    properties: {
-                      timezone: { type: "string", description: "User's timezone (e.g., 'America/Vancouver')" }
-                    },
-                    required: ["timezone"]
-                  }
-                }
-              }
-            }
-          ]
-        }
-      })
-      
-      response = await client.send(nextCommand)
-      console.log(`🔍 Iteration ${iterations} Response:`, JSON.stringify(response, null, 2))
-    }
+    // Process the response directly since no tools are used
 
     // Process the final response
     let finalMessage = ""
@@ -451,23 +372,26 @@ If unsure: {"action": "unsure", "outputMessage": "Can you clarify..."}
 }
 
 
-async function processAIResponse(supabase: any, user_id: string, aiResponse: any) {
+async function processAIResponse(supabase: any, user_id: string, aiResponse: any, userTimezone: string) {
   const { action, aiJsonData } = aiResponse
   
-  // Use aiJsonData if available, otherwise fall back to aiResponse itself
-  const dataToProcess = aiJsonData || aiResponse
+  // Always use aiJsonData - never fall back to aiResponse
+  if (!aiJsonData) {
+    console.error("❌ aiJsonData is missing for action:", action)
+    return { success: false, error: `Missing aiJsonData for action: ${action}` }
+  }
 
   switch (action) {
     case "start_activity":
-      return await handleStartActivity(supabase, user_id, dataToProcess)
+      return await handleStartActivity(supabase, user_id, aiJsonData)
     case "stop_activity":
       return await handleStopActivity(supabase, user_id)
     case "log_past":
-      return await handleLogPast(supabase, user_id, dataToProcess)
+      return await handleLogPast(supabase, user_id, aiJsonData, userTimezone)
     case "edit_activities":
-      return await handleEditActivities(supabase, user_id, dataToProcess)
+      return await handleEditActivities(supabase, user_id, aiJsonData)
     case "delete_activities":
-      return await handleDeleteActivities(supabase, user_id, dataToProcess)
+      return await handleDeleteActivities(supabase, user_id, aiJsonData)
     case "unsure":
       return { success: true, message: "No action taken" }
     default:
@@ -532,10 +456,70 @@ async function handleStopActivity(supabase: any, user_id: string) {
   return { success: true, activityId: stoppedActivityId }
 }
 
-async function handleLogPast(supabase: any, user_id: string, aiResponse: any) {
+async function handleLogPast(supabase: any, user_id: string, aiResponse: any, userTimezone: string) {
   const { entries } = aiResponse
   
   if (!entries || !Array.isArray(entries)) {
+    return { success: false, error: "Missing or invalid entries array for log_past" }
+  }
+
+  console.log("Preparing to log past activities:", { user_id, entries })
+
+  // Format the entries for display using the original AI timestamps (before UTC conversion)
+  const formattedEntries = entries.map(entry => {
+    const startTime = new Date(entry.start)
+    const endTime = new Date(entry.end)
+    const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+    
+    // Display the original times as-is (these are what the user specified)
+    const startDisplay = startTime.toLocaleString('en-US', { 
+      weekday: 'short',
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+    const endDisplay = endTime.toLocaleString('en-US', { 
+      weekday: 'short',
+      month: 'short', 
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true
+    })
+    
+    return {
+      activity: entry.activity,
+      start: startDisplay,
+      end: endDisplay,
+      duration: `${durationMinutes} minutes`
+    }
+  })
+
+  // Create confirmation message with expected changes
+  const confirmationMessage = `I found ${entries.length} past activity${entries.length > 1 ? 'ies' : 'y'} to log:\n\n` +
+    formattedEntries.map(entry => 
+      `• **${entry.activity}**: ${entry.start} to ${entry.end} (${entry.duration})`
+    ).join('\n') +
+    `\n\nWould you like me to log these activities?`
+
+  return { 
+    success: true, 
+    requiresConfirmation: true,
+    message: confirmationMessage,
+    entries: entries // Keep original entries for actual logging
+  }
+}
+
+async function handleLogPastExecution(supabase: any, user_id: string, aiJsonData: any) {
+  console.log("🔍 Debug - handleLogPastExecution received:", JSON.stringify(aiJsonData, null, 2))
+  
+  // Always use aiJsonData - never fall back
+  const entries = aiJsonData.entries
+  
+  if (!entries || !Array.isArray(entries)) {
+    console.log("❌ Debug - Missing entries array. aiJsonData keys:", Object.keys(aiJsonData))
     return { success: false, error: "Missing or invalid entries array for log_past" }
   }
 
@@ -547,6 +531,8 @@ async function handleLogPast(supabase: any, user_id: string, aiResponse: any) {
     const startTime = new Date(entry.start)
     const endTime = new Date(entry.end)
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+
+    console.log(`🔍 Database insertion - Activity: ${entry.activity}, Start: ${entry.start}, End: ${entry.end}`)
 
     const { data: activityId, error } = await supabase
       .rpc('insert_n8n_activity', {
@@ -732,56 +718,84 @@ async function handleConvertToLocalTimeTool(toolUse: any, timezone: string) {
 }
 
 // Handle confirmation responses
-async function handleConfirmation(userMessage: string, userId: string) {
+async function handleConfirmation(userMessage: string, userId: string, userTimezone: string) {
   console.log("✅ Handling confirmation:", userMessage)
   
   const isYes = userMessage.toLowerCase().includes('yes')
   
-  if (isYes) {
-    // Get the last assistant message with aiJsonData
-    const supabase = await createClient()
-    const { data: lastMessage, error } = await supabase
-      .from('messages')
-      .select('*')
-      .eq('user_id', userId)
-      .eq('role', 'assistant')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
-
-    if (error || !lastMessage) {
-      return {
-        action: "confirmation_error",
-        outputMessage: "❌ Could not find the operation to confirm."
-      }
+  if (!isYes) {
+    return {
+      action: "confirmation_declined", 
+      outputMessage: "❌ Operation cancelled.",
+      aiJsonData: null
     }
+  }
 
-    const aiJsonData = lastMessage.metadata?.aiJsonData
-    if (!aiJsonData) {
-      return {
-        action: "confirmation_error", 
-        outputMessage: "❌ No operation data found to execute."
-      }
+  // Get the last assistant message with aiJsonData (contains LOCAL times)
+  const supabase = await createClient()
+  const { data: lastMessage, error } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('role', 'assistant')
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .single()
+
+  if (error || !lastMessage) {
+    return {
+      action: "confirmation_error",
+      outputMessage: "❌ Could not find the operation to confirm.",
+      aiJsonData: null
     }
+  }
 
-    // Execute the operation based on the stored AI JSON
-    const result = await processAIResponse(supabase, userId, aiJsonData)
+  const storedAiJsonData = lastMessage.metadata?.aiJsonData
+  const storedTimezone = lastMessage.metadata?.userTimezone || userTimezone
+  
+  if (!storedAiJsonData) {
+    return {
+      action: "confirmation_error", 
+      outputMessage: "❌ No operation data found to execute.",
+      aiJsonData: null
+    }
+  }
+
+  console.log("🔍 Stored aiJsonData (LOCAL times):", JSON.stringify(storedAiJsonData, null, 2))
+  console.log("🕐 User timezone:", storedTimezone)
+
+  // Convert LOCAL times to UTC BEFORE execution
+  const aiJsonDataWithUTC = convertAIResponseTimesToUTC(storedAiJsonData, storedTimezone)
+  console.log("🔄 Converted to UTC:", JSON.stringify(aiJsonDataWithUTC, null, 2))
+
+  // Execute the operation
+  let result
+  if (storedAiJsonData.action === "log_past") {
+    // For log_past, use the converted UTC times
+    result = await handleLogPastExecution(supabase, userId, aiJsonDataWithUTC)
+  } else {
+    // For other actions, use processAIResponse
+    result = await processAIResponse(supabase, userId, { 
+      action: aiJsonDataWithUTC.action, 
+      aiJsonData: aiJsonDataWithUTC 
+    }, storedTimezone)
+  }
+  
+  if (result.success) {
+    // Extract activity IDs from result
+    const activityId = result.activityId || (result.activityIds && result.activityIds[0]) || null
     
-    if (result.success) {
-      return {
-        action: "confirmation_accepted",
-        outputMessage: "✅ Operation completed successfully!"
-      }
-    } else {
-      return {
-        action: "confirmation_error",
-        outputMessage: `❌ Operation failed: ${(result as any).error || 'Unknown error'}`
-      }
+    return {
+      action: "confirmation_accepted",
+      outputMessage: "✅ Operation completed successfully!",
+      activityId: activityId,
+      activityIds: result.activityIds
     }
   } else {
     return {
-      action: "confirmation_declined", 
-      outputMessage: "❌ Operation cancelled."
+      action: "confirmation_error",
+      outputMessage: `❌ Operation failed: ${(result as any).error || 'Unknown error'}`,
+      activityId: null
     }
   }
 }

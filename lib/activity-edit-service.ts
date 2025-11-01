@@ -10,6 +10,40 @@ export interface ActivityEditData {
   duration_minutes?: number
 }
 
+export interface ActivityInsertData {
+  user_id: string
+  activity_name: string
+  started_at?: string
+  ended_at?: string | null
+  duration_minutes?: number | null
+}
+
+export async function insertActivity(
+  data: ActivityInsertData
+): Promise<{ success: boolean; error?: string; activityId?: string }> {
+  const supabase = await createClient()
+  
+  try {
+    const { data: activityId, error } = await supabase
+      .rpc('insert_n8n_activity', {
+        p_user_id: data.user_id,
+        p_activity_name: data.activity_name,
+        p_started_at: data.started_at || new Date().toISOString(),
+        p_ended_at: data.ended_at || null,
+        p_duration_minutes: data.duration_minutes || null
+      })
+
+    if (error) {
+      console.error("Error inserting activity:", error)
+      return { success: false, error: error.message }
+    }
+    return { success: true, activityId: activityId }
+  } catch (error) {
+    console.error("Error in insertActivity:", error)
+    return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+  }
+}
+
 export async function getActivityDetails(activityId: string): Promise<{ success: boolean; error?: string; activity?: Activity }> {
   const supabase = await createClient()
   try {

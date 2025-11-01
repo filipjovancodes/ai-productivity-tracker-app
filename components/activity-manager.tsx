@@ -36,10 +36,31 @@ interface ActivityManagerProps {
   refreshTrigger?: number
 }
 
+// Convert UTC timestamp to datetime-local format (YYYY-MM-DDTHH:mm)
+function convertUTCToDateTimeLocal(utcTimestamp: string): string {
+  const date = new Date(utcTimestamp)
+  // Get the local time string in YYYY-MM-DDTHH:mm format
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hours = String(date.getHours()).padStart(2, '0')
+  const minutes = String(date.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+// Convert datetime-local format to UTC ISO string
+function convertDateTimeLocalToUTC(dateTimeLocal: string): string {
+  // Create a date object from the local datetime string
+  // This assumes the input is in the user's local timezone
+  const date = new Date(dateTimeLocal)
+  return date.toISOString()
+}
+
 export function ActivityManager({ onActivityChange, initialActivities, refreshTrigger }: ActivityManagerProps) {
   const [activities, setActivities] = useState<Activity[]>(initialActivities || [])
   const [loading, setLoading] = useState(!initialActivities)
   const [editingActivity, setEditingActivity] = useState<Activity | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [editForm, setEditForm] = useState({
     activity_name: "",
@@ -81,57 +102,125 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
     setEditingActivity(activity)
     setEditForm({
       activity_name: activity.activity_name,
-      started_at: activity.started_at.slice(0, 16),
-      ended_at: activity.ended_at ? activity.ended_at.slice(0, 16) : "",
+      started_at: convertUTCToDateTimeLocal(activity.started_at),
+      ended_at: activity.ended_at ? convertUTCToDateTimeLocal(activity.ended_at) : "",
       duration_minutes: activity.duration_minutes?.toString() || "",
     })
+    setIsEditDialogOpen(true)
   }
 
   const handleSaveEdit = async () => {
-    if (!editingActivity) return
+    console.log("🔥🔥🔥 handleSaveEdit called 🔥🔥🔥")
+    console.log("Editing activity:", editingActivity)
+    console.log("Edit form:", editForm)
+    
+    if (!editingActivity) {
+      console.error("❌ No editing activity found")
+      return
+    }
 
     try {
       const updates: any = {}
 
       if (editForm.activity_name !== editingActivity.activity_name) {
         updates.activity_name = editForm.activity_name
+        console.log("📝 Activity name changed:", editForm.activity_name)
       }
 
-      if (editForm.started_at !== editingActivity.started_at.slice(0, 16)) {
-        updates.started_at = new Date(editForm.started_at).toISOString()
+      const originalStartedLocal = convertUTCToDateTimeLocal(editingActivity.started_at)
+      console.log("📅 Original started_at (local):", originalStartedLocal)
+      console.log("📅 Form started_at:", editForm.started_at)
+      if (editForm.started_at !== originalStartedLocal) {
+        const utcStart = convertDateTimeLocalToUTC(editForm.started_at)
+        updates.started_at = utcStart
+        console.log("📝 Start time changed to UTC:", utcStart)
       }
 
-      if (editForm.ended_at !== (editingActivity.ended_at?.slice(0, 16) || "")) {
-        updates.ended_at = editForm.ended_at ? new Date(editForm.ended_at).toISOString() : null
+      const originalEndedLocal = editingActivity.ended_at ? convertUTCToDateTimeLocal(editingActivity.ended_at) : ""
+      console.log("📅 Original ended_at (local):", originalEndedLocal)
+      console.log("📅 Form ended_at:", editForm.ended_at)
+      if (editForm.ended_at !== originalEndedLocal) {
+        const utcEnd = editForm.ended_at ? convertDateTimeLocalToUTC(editForm.ended_at) : null
+        updates.ended_at = utcEnd
+        console.log("📝 End time changed to UTC:", utcEnd)
       }
 
       if (editForm.duration_minutes !== (editingActivity.duration_minutes?.toString() || "")) {
         updates.duration_minutes = editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null
+        console.log("📝 Duration changed:", updates.duration_minutes)
       }
 
+      console.log("📦 Updates object:", updates)
+
       if (Object.keys(updates).length === 0) {
+        console.log("⚠️ No updates to save")
+        setIsEditDialogOpen(false)
         setEditingActivity(null)
         return
       }
 
-      const response = await fetch(`/api/activities/${editingActivity.id}`, {
+      const url = `/api/activities/${editingActivity.id}`
+      console.log("🌐 Making PUT request to:", url)
+      console.log("📤 Request payload:", JSON.stringify(updates, null, 2))
+
+      const response = await fetch(url, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(updates),
       })
 
-      const data = await response.json()
+      console.log("📥 Response status:", response.status)
+      console.log("📥 Response statusText:", response.statusText)
+      console.log("📥 Response headers:", Object.fromEntries(response.headers.entries()))
+
+      // Read the response body once
+      const responseText = await response.text()
+      console.log("📥 Response text:", responseText)
+
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status}: ${response.statusText}`
+        try {
+          if (responseText) {
+            const errorData = JSON.parse(responseText)
+            errorMessage = errorData.error || errorData.details || errorMessage
+            console.error("❌ Response error data:", errorData)
+          }
+        } catch (e) {
+          // Not JSON, use the text as is or the status message
+          console.error("❌ Error parsing error response:", e)
+          errorMessage = responseText || errorMessage
+        }
+        alert(`Error updating activity: ${errorMessage}`)
+        return
+      }
+
+      let data
+      try {
+        data = responseText ? JSON.parse(responseText) : {}
+      } catch (e) {
+        console.error("❌ Error parsing response as JSON:", e)
+        console.error("Response text that failed to parse:", responseText)
+        alert("Error updating activity: Invalid response from server")
+        return
+      }
+      
+      console.log("✅ Response data:", data)
 
       if (data.success) {
+        console.log("✅ Update successful, reloading activities...")
         await loadActivities()
         onActivityChange?.()
+        setIsEditDialogOpen(false)
         setEditingActivity(null)
       } else {
+        console.error("❌ Update failed:", data.error)
         alert("Error updating activity: " + data.error)
       }
     } catch (error) {
-      console.error("Error updating activity:", error)
-      alert("Error updating activity")
+      console.error("❌ Error updating activity:", error)
+      console.error("Error details:", error instanceof Error ? error.message : 'Unknown error')
+      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace')
+      alert("Error updating activity: " + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 
@@ -174,37 +263,80 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
     setIsCreating(true)
     setEditForm({
       activity_name: "",
-      started_at: oneHourAgo.toISOString().slice(0, 16),
-      ended_at: now.toISOString().slice(0, 16),
+      started_at: convertUTCToDateTimeLocal(oneHourAgo.toISOString()),
+      ended_at: convertUTCToDateTimeLocal(now.toISOString()),
       duration_minutes: "60",
     })
   }
 
   const handleSaveCreate = async () => {
+    console.log("🔥🔥🔥 handleSaveCreate called 🔥🔥🔥")
+    console.log("Create form:", editForm)
+    
     try {
+      const payload = {
+        activity_name: editForm.activity_name,
+        started_at: convertDateTimeLocalToUTC(editForm.started_at),
+        ended_at: editForm.ended_at ? convertDateTimeLocalToUTC(editForm.ended_at) : null,
+        duration_minutes: editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null,
+      }
+      console.log("📤 Request payload:", JSON.stringify(payload, null, 2))
+
       const response = await fetch("/api/activities", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          activity_name: editForm.activity_name,
-          started_at: new Date(editForm.started_at).toISOString(),
-          ended_at: editForm.ended_at ? new Date(editForm.ended_at).toISOString() : null,
-          duration_minutes: editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null,
-        }),
+        body: JSON.stringify(payload),
       })
 
-      const data = await response.json()
+      console.log("📥 Response status:", response.status)
+      console.log("📥 Response statusText:", response.statusText)
+
+      // Read the response body once
+      const responseText = await response.text()
+      console.log("📥 Response text:", responseText)
+
+      if (!response.ok) {
+        let errorMessage = `Error ${response.status}: ${response.statusText}`
+        try {
+          if (responseText) {
+            const errorData = JSON.parse(responseText)
+            errorMessage = errorData.error || errorData.details || errorMessage
+            console.error("❌ Response error data:", errorData)
+          }
+        } catch (e) {
+          console.error("❌ Error parsing error response:", e)
+          errorMessage = responseText || errorMessage
+        }
+        alert(`Error creating activity: ${errorMessage}`)
+        return
+      }
+
+      let data
+      try {
+        data = responseText ? JSON.parse(responseText) : {}
+      } catch (e) {
+        console.error("❌ Error parsing response as JSON:", e)
+        console.error("Response text that failed to parse:", responseText)
+        alert("Error creating activity: Invalid response from server")
+        return
+      }
+      
+      console.log("✅ Response data:", data)
 
       if (data.success) {
+        console.log("✅ Create successful, reloading activities...")
         await loadActivities()
         onActivityChange?.()
         setIsCreating(false)
       } else {
-        alert("Error creating activity: " + data.error)
+        console.error("❌ Create failed:", data.error)
+        alert("Error creating activity: " + (data.error || 'Unknown error'))
       }
     } catch (error) {
-      console.error("Error creating activity:", error)
-      alert("Error creating activity")
+      console.error("❌ Error creating activity:", error)
+      console.error("Error details:", error instanceof Error ? error.message : 'Unknown error')
+      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace')
+      alert("Error creating activity: " + (error instanceof Error ? error.message : 'Unknown error'))
     }
   }
 
@@ -319,7 +451,12 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                     <Badge variant={activity.ended_at ? "secondary" : "default"}>
                       {activity.ended_at ? "Completed" : "Active"}
                     </Badge>
-                    <Dialog>
+                    <Dialog open={isEditDialogOpen && editingActivity?.id === activity.id} onOpenChange={(open) => {
+                      setIsEditDialogOpen(open)
+                      if (!open) {
+                        setEditingActivity(null)
+                      }
+                    }}>
                       <DialogTrigger asChild>
                         <Button variant="outline" size="sm" onClick={() => handleEdit(activity)}>
                           <Edit className="h-4 w-4" />
@@ -368,7 +505,10 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                           </div>
                         </div>
                         <DialogFooter>
-                          <Button variant="outline" onClick={() => setEditingActivity(null)}>
+                          <Button variant="outline" onClick={() => {
+                            setIsEditDialogOpen(false)
+                            setEditingActivity(null)
+                          }}>
                             Cancel
                           </Button>
                           <Button onClick={handleSaveEdit}>Save Changes</Button>
