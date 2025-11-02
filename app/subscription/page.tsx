@@ -1,10 +1,11 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Check, Zap, Crown, Star } from "lucide-react"
+import { Check, Crown, Star } from "lucide-react"
 import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { StripeCheckout } from "@/components/stripe-checkout"
+import Image from "next/image"
 
 export default async function SubscriptionPage() {
   const supabase = await createClient()
@@ -22,8 +23,14 @@ export default async function SubscriptionPage() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <Zap className="h-6 w-6 text-primary-foreground" />
+              <div className="relative h-20 w-20">
+                <Image
+                  src="/logo.png"
+                  alt="AI Time Tracker Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">AI Time Tracker</h1>
@@ -184,28 +191,6 @@ export default async function SubscriptionPage() {
               </StripeCheckout>
             </CardContent>
           </Card>
-        </div>
-
-        {/* Debug section for testing webhook logic */}
-        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2 text-blue-800">Test Webhook Logic</h3>
-          <p className="text-sm text-blue-700 mb-4">
-            Test the subscription creation logic without going through Stripe checkout.
-          </p>
-          <div className="flex gap-2">
-            <form action="/api/stripe/test-webhook" method="POST" className="flex-1">
-              <input type="hidden" name="plan" value="pro" />
-              <Button type="submit" variant="outline" size="sm" className="w-full">
-                Test Pro Subscription
-              </Button>
-            </form>
-            <form action="/api/stripe/test-webhook" method="POST" className="flex-1">
-              <input type="hidden" name="plan" value="premium" />
-              <Button type="submit" variant="outline" size="sm" className="w-full">
-                Test Premium Subscription
-              </Button>
-            </form>
-          </div>
         </div>
 
         <div className="mt-12 text-center">

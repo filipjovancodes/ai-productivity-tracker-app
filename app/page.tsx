@@ -9,8 +9,8 @@ import { ActivityAnalytics } from "@/components/activity-analytics"
 import { ActivityManager } from "@/components/activity-manager"
 import { Card } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Activity } from "lucide-react"
 import { HomeClient } from "@/components/home-client"
+import Image from "next/image"
 
 export default async function Home() {
   const supabase = await createClient()
@@ -36,8 +36,14 @@ export default async function Home() {
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <Activity className="h-6 w-6 text-primary-foreground" />
+              <div className="relative h-20 w-20">
+                <Image
+                  src="/logo.png"
+                  alt="AI Time Tracker Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
               </div>
               <div>
                 <h1 className="text-2xl font-bold">AI Time Tracker</h1>

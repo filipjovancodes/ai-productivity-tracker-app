@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Activity } from "lucide-react"
+import Image from "next/image"
 
 export default function SignUpSuccessPage() {
   return (
@@ -7,8 +7,14 @@ export default function SignUpSuccessPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-              <Activity className="h-7 w-7 text-primary-foreground" />
+            <div className="relative h-24 w-24">
+              <Image
+                src="/logo.png"
+                alt="AI Time Tracker Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <h1 className="text-3xl font-bold">AI Time Tracker</h1>
           </div>

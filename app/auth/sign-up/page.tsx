@@ -10,7 +10,8 @@ import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState } from "react"
-import { Activity, Chrome } from "lucide-react"
+import { Chrome } from "lucide-react"
+import Image from "next/image"
 
 export default function SignUpPage() {
   const [email, setEmail] = useState("")
@@ -85,8 +86,14 @@ export default function SignUpPage() {
       <div className="w-full max-w-sm">
         <div className="flex flex-col gap-6">
           <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
-              <Activity className="h-7 w-7 text-primary-foreground" />
+            <div className="relative h-24 w-24">
+              <Image
+                src="/logo.png"
+                alt="AI Time Tracker Logo"
+                fill
+                className="object-contain"
+                priority
+              />
             </div>
             <h1 className="text-3xl font-bold">AI Time Tracker</h1>
           </div>
