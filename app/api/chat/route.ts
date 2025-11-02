@@ -239,7 +239,7 @@ async function callAIForProductivityParsing(userMessage: string, userId: string,
   const userTimezone = timezone || 'UTC'
   const currentTime = new Date().toISOString()
   
-  const systemPrompt = `You are a productivity tracking assistant.
+  const systemPrompt = `You are an AI time tracking assistant.
 
 MOST IMPORTANT RULE: Parse user input and ALWAYS respond with JSON. No extra text or markdown.
 

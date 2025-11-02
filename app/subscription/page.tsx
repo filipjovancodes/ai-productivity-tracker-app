@@ -26,7 +26,7 @@ export default async function SubscriptionPage() {
                 <Zap className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Productivity Tracker</h1>
+                <h1 className="text-2xl font-bold">AI Time Tracker</h1>
                 <p className="text-sm text-muted-foreground">Choose your plan</p>
               </div>
             </div>
@@ -48,7 +48,7 @@ export default async function SubscriptionPage() {
         <div className="text-center mb-8">
           <h2 className="text-3xl font-bold mb-4">Choose Your Plan</h2>
           <p className="text-muted-foreground text-lg">
-            Unlock the full potential of AI-powered productivity tracking
+            Unlock the full potential of AI-powered time tracking
           </p>
         </div>
 
@@ -100,7 +100,7 @@ export default async function SubscriptionPage() {
                   Pro
                 </CardTitle>
               </div>
-              <CardDescription>For serious productivity enthusiasts</CardDescription>
+              <CardDescription>For serious time tracking enthusiasts</CardDescription>
               <div className="text-3xl font-bold">$5<span className="text-sm font-normal text-muted-foreground">/month</span></div>
             </CardHeader>
             <CardContent className="space-y-4">

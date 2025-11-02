@@ -139,7 +139,7 @@ export function SubscriptionClient() {
               <Star className="h-5 w-5 text-yellow-500" />
               Pro Plan
             </CardTitle>
-            <CardDescription>Perfect for serious productivity tracking</CardDescription>
+            <CardDescription>Perfect for serious time tracking</CardDescription>
             <div className="text-2xl font-bold">$9<span className="text-sm font-normal text-muted-foreground">/month</span></div>
           </CardHeader>
           <CardContent className="space-y-4">

@@ -159,7 +159,7 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
       <Card>
         <CardHeader>
           <CardTitle>Time by Activity</CardTitle>
-          <CardDescription>Your productivity breakdown for the last 7 days</CardDescription>
+          <CardDescription>Your time breakdown for the last 7 days</CardDescription>
         </CardHeader>
         <CardContent>
           <ChartContainer

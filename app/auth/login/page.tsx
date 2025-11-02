@@ -80,7 +80,7 @@ export default function LoginPage() {
             <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary">
               <Activity className="h-7 w-7 text-primary-foreground" />
             </div>
-            <h1 className="text-3xl font-bold">Productivity Tracker</h1>
+            <h1 className="text-3xl font-bold">AI Time Tracker</h1>
           </div>
           <Card>
             <CardHeader>

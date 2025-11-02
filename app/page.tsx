@@ -40,7 +40,7 @@ export default async function Home() {
                 <Activity className="h-6 w-6 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-2xl font-bold">Productivity Tracker</h1>
+                <h1 className="text-2xl font-bold">AI Time Tracker</h1>
                 <p className="text-sm text-muted-foreground">Track your time with AI</p>
               </div>
             </div>
