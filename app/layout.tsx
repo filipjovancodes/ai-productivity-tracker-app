@@ -70,6 +70,7 @@ export const metadata: Metadata = {
     // yandex: 'your-yandex-verification-code',
     // yahoo: 'your-yahoo-verification-code',
   },
+    generator: 'v0.app'
 };
 
 export default function RootLayout({

@@ -122,4 +122,34 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* Mobile-optimized scrolling and interactions */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Prevent zoom on input focus for iOS */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+
+  /* Improve touch targets on mobile */
+  @media (max-width: 640px) {
+    button {
+      min-height: 44px;
+      min-width: 44px;
+    }
+  }
+}
+
+/* Remove default Safari styling for mobile */
+@supports (padding: max(0px)) {
+  body {
+    padding-left: max(0px, env(safe-area-inset-left));
+    padding-right: max(0px, env(safe-area-inset-right));
+    padding-top: max(0px, env(safe-area-inset-top));
+    padding-bottom: max(0px, env(safe-area-inset-bottom));
+  }
 }

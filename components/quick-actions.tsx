@@ -1,9 +1,7 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { startActivity, stopCurrentActivity } from "@/lib/activity-service"
-import { Zap, Square } from "lucide-react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 
@@ -40,35 +38,25 @@ export function QuickActions({ topActivities, hasCurrentActivity, onActivityChan
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Zap className="h-5 w-5" />
-          Quick Actions
-        </CardTitle>
-        <CardDescription>Start your most frequent activities with one click</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        {topActivities.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-4">Your most used activities will appear here</p>
-        ) : (
-          <div className="grid grid-cols-2 gap-2">
-            {topActivities.map((activity) => (
-              <Button
-                key={activity}
-                variant="outline"
-                onClick={() => handleStartActivity(activity)}
-                disabled={loading !== null}
-                className="h-auto py-3 flex flex-col items-center gap-1"
-              >
-                <span className="font-medium">{activity}</span>
-                {loading === activity && <span className="text-xs text-muted-foreground">Starting...</span>}
-              </Button>
-            ))}
-          </div>
-        )}
-
-      </CardContent>
-    </Card>
+    <div className="space-y-2">
+      {topActivities.length === 0 ? (
+        <p className="text-xs text-muted-foreground text-center py-2">Start activities to see quick actions</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-1.5">
+          {topActivities.slice(0, 4).map((activity) => (
+            <Button
+              key={activity}
+              variant="outline"
+              onClick={() => handleStartActivity(activity)}
+              disabled={loading !== null}
+              className="h-8 text-xs py-1 px-2"
+              size="sm"
+            >
+              <span className="truncate">{activity}</span>
+            </Button>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }

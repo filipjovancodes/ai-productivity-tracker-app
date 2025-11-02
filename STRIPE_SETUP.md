@@ -2,15 +2,15 @@
 
 ## 1. Install Stripe Dependencies
 
-```bash
+\`\`\`bash
 npm install stripe
-```
+\`\`\`
 
 ## 2. Environment Variables
 
 Add these to your `.env.local` file:
 
-```env
+\`\`\`env
 # Stripe
 STRIPE_SECRET_KEY=sk_test_your_stripe_secret_key
 STRIPE_PUBLISHABLE_KEY=pk_test_your_stripe_publishable_key
@@ -22,7 +22,7 @@ STRIPE_PREMIUM_PRICE_ID=price_your_premium_price_id
 
 # App URL
 NEXT_PUBLIC_APP_URL=http://localhost:3000
-```
+\`\`\`
 
 ## 3. Create Stripe Products and Prices
 

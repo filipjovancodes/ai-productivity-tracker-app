@@ -1,6 +1,7 @@
 "use client"
 
 import type React from "react"
+import type { SpeechRecognition, SpeechRecognitionEvent } from "webkit-speech-api"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -56,14 +57,14 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   const shouldScrollToBottomRef = useRef(true)
   const previousScrollHeightRef = useRef(0)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
-  const finalTranscriptRef = useRef<string>('')
+  const finalTranscriptRef = useRef<string>("")
 
   // Initialize messages on component mount
   useEffect(() => {
     const initializeChat = async () => {
       try {
         let initialMsgs: ChatMessage[] = []
-        
+
         if (initialMessages && initialMessages.length > 0) {
           initialMsgs = initialMessages
           setHasMoreMessages(initialMessages.length === 6)
@@ -71,13 +72,13 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
           initialMsgs = await getRecentMessages(6)
           setHasMoreMessages(initialMsgs.length === 6)
         }
-        
+
         setMessages(initialMsgs)
         lastMessageCountRef.current = initialMsgs.length
-        
+
         // Scroll to bottom instantly, then mark as ready
         setTimeout(() => {
-          messagesEndRef.current?.scrollIntoView({ behavior: 'instant' })
+          messagesEndRef.current?.scrollIntoView({ behavior: "instant" })
           setTimeout(() => setIsReady(true), 50)
         }, 0)
       } catch (error) {
@@ -92,7 +93,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   // Load more messages when scrolling to top
   const loadMoreMessages = useCallback(async () => {
     if (isLoadingMore || !hasMoreMessages || messages.length === 0) return
-    
+
     const container = messagesContainerRef.current
     if (!container) return
 
@@ -103,12 +104,12 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     try {
       const oldestMessage = messages[0]
       const olderMessages = await getRecentMessages(20, oldestMessage.created_at)
-      
+
       if (olderMessages.length === 0) {
         setHasMoreMessages(false)
       } else {
-        setMessages(prev => [...olderMessages, ...prev])
-        
+        setMessages((prev) => [...olderMessages, ...prev])
+
         // Restore scroll position after new messages are rendered
         requestAnimationFrame(() => {
           const newScrollHeight = container.scrollHeight
@@ -134,8 +135,8 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
       }
     }
 
-    container.addEventListener('scroll', handleScroll, { passive: true })
-    return () => container.removeEventListener('scroll', handleScroll)
+    container.addEventListener("scroll", handleScroll, { passive: true })
+    return () => container.removeEventListener("scroll", handleScroll)
   }, [hasMoreMessages, isLoadingMore, loadMoreMessages, isReady])
 
   // Poll for new messages every 3 seconds
@@ -145,13 +146,13 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     const interval = setInterval(async () => {
       try {
         const recentMessages = await getRecentMessages(6)
-        
-        setMessages(prev => {
+
+        setMessages((prev) => {
           // If we have more than 6 messages (from lazy loading), only append new ones
           if (prev.length > 6) {
-            const existingIds = new Set(prev.map(m => m.id))
-            const newMessages = recentMessages.filter(m => !existingIds.has(m.id))
-            
+            const existingIds = new Set(prev.map((m) => m.id))
+            const newMessages = recentMessages.filter((m) => !existingIds.has(m.id))
+
             if (newMessages.length > 0) {
               shouldScrollToBottomRef.current = true
               return [...prev, ...newMessages]
@@ -161,7 +162,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
             // Only update if there are actual changes
             const lastOld = prev[prev.length - 1]
             const lastNew = recentMessages[recentMessages.length - 1]
-            
+
             if (!lastOld || lastNew?.id !== lastOld.id || recentMessages.length !== prev.length) {
               shouldScrollToBottomRef.current = true
               return recentMessages
@@ -205,11 +206,11 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
         setPendingConfirmation(null)
       }
     }
-    
+
     // Auto-scroll to bottom only when appropriate
     if (shouldScrollToBottomRef.current) {
       setTimeout(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" })
         shouldScrollToBottomRef.current = false
       }, 100)
     }
@@ -257,26 +258,29 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
         throw new Error("Failed to send message")
       }
 
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
       // Load enough messages to include the new response
       const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
       setMessages(recentMessages)
-      
+
       onActivityChange?.()
     } catch (error) {
       console.error("Error sending message:", error)
       setMessages((prev) => prev.filter((msg) => msg.id !== newUserMessage.id))
-      
+
       // Show usage limit error with upgrade link
       if (error instanceof Error && error.message.includes("Usage limit exceeded")) {
-        setMessages((prev) => [...prev, {
-          id: `error-${Date.now()}`,
-          role: "assistant" as const,
-          content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
-          created_at: new Date().toISOString(),
-          source: "system"
-        }])
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: "assistant" as const,
+            content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
+            created_at: new Date().toISOString(),
+            source: "system",
+          },
+        ])
       }
     } finally {
       setIsLoading(false)
@@ -308,11 +312,11 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
         throw new Error("Failed to send confirmation")
       }
 
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
+      await new Promise((resolve) => setTimeout(resolve, 300))
+
       const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
       setMessages(recentMessages)
-      
+
       onActivityChange?.()
     } catch (error) {
       console.error("Error sending confirmation:", error)
@@ -327,14 +331,14 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
 
     // Check for browser support
     const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
-    
+
     if (SpeechRecognition) {
       setIsSpeechSupported(true)
-      
+
       const recognition = new SpeechRecognition()
       recognition.continuous = true
       recognition.interimResults = true
-      recognition.lang = 'en-US'
+      recognition.lang = "en-US"
 
       recognition.onstart = () => {
         setIsRecording(true)
@@ -343,16 +347,16 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
       }
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let interimTranscript = ''
-        let newFinalTranscript = ''
+        let interimTranscript = ""
+        let newFinalTranscript = ""
 
         // Process all results from the event
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript
           if (event.results[i].isFinal) {
-            newFinalTranscript += transcript + ' '
+            newFinalTranscript += transcript + " "
             // Add to accumulated final transcript
-            finalTranscriptRef.current += transcript + ' '
+            finalTranscriptRef.current += transcript + " "
           } else {
             interimTranscript += transcript
           }
@@ -363,22 +367,22 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
       }
 
       recognition.onerror = (event: any) => {
-        console.error('Speech recognition error:', event.error)
+        console.error("Speech recognition error:", event.error)
         setIsRecording(false)
-        
-        let errorMessage = 'Speech recognition error'
-        if (event.error === 'no-speech') {
-          errorMessage = 'No speech detected. Please try again.'
-        } else if (event.error === 'audio-capture') {
-          errorMessage = 'No microphone found. Please check your microphone.'
-        } else if (event.error === 'not-allowed') {
-          errorMessage = 'Microphone permission denied. Please allow microphone access.'
+
+        let errorMessage = "Speech recognition error"
+        if (event.error === "no-speech") {
+          errorMessage = "No speech detected. Please try again."
+        } else if (event.error === "audio-capture") {
+          errorMessage = "No microphone found. Please check your microphone."
+        } else if (event.error === "not-allowed") {
+          errorMessage = "Microphone permission denied. Please allow microphone access."
         } else {
           errorMessage = `Speech recognition error: ${event.error}`
         }
-        
+
         setRecognitionError(errorMessage)
-        
+
         // Clear error after 5 seconds
         setTimeout(() => setRecognitionError(null), 5000)
       }
@@ -404,7 +408,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
 
   const toggleRecording = useCallback(() => {
     if (!recognitionRef.current) {
-      setRecognitionError('Speech recognition not supported in this browser')
+      setRecognitionError("Speech recognition not supported in this browser")
       return
     }
 
@@ -418,89 +422,95 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
       try {
         recognitionRef.current.start()
       } catch (error) {
-        console.error('Error starting recognition:', error)
-        setRecognitionError('Failed to start recording. Please try again.')
+        console.error("Error starting recognition:", error)
+        setRecognitionError("Failed to start recording. Please try again.")
         setIsRecording(false)
       }
     }
   }, [isRecording, input])
 
   // Also stop recording if user submits form while recording
-  const handleSubmitWithVoice = useCallback(async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!input.trim() || isLoading) return
+  const handleSubmitWithVoice = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!input.trim() || isLoading) return
 
-    // Stop recording if active
-    if (isRecording && recognitionRef.current) {
-      recognitionRef.current.stop()
-      // Wait a moment for onend to fire and finalize transcript
-      await new Promise(resolve => setTimeout(resolve, 200))
-    }
+      // Stop recording if active
+      if (isRecording && recognitionRef.current) {
+        recognitionRef.current.stop()
+        // Wait a moment for onend to fire and finalize transcript
+        await new Promise((resolve) => setTimeout(resolve, 200))
+      }
 
-    // Then proceed with normal submit
-    const userMessage = input.trim()
-    setInput("")
-    setIsLoading(true)
-    shouldScrollToBottomRef.current = true
+      // Then proceed with normal submit
+      const userMessage = input.trim()
+      setInput("")
+      setIsLoading(true)
+      shouldScrollToBottomRef.current = true
 
-    const newUserMessage: ChatMessage = {
-      id: `temp-${Date.now()}`,
-      role: "user",
-      content: userMessage,
-      created_at: new Date().toISOString(),
-      source: "chat",
-    }
-    setMessages((prev) => [...prev, newUserMessage])
+      const newUserMessage: ChatMessage = {
+        id: `temp-${Date.now()}`,
+        role: "user",
+        content: userMessage,
+        created_at: new Date().toISOString(),
+        source: "chat",
+      }
+      setMessages((prev) => [...prev, newUserMessage])
 
-    try {
-      const userId = await getCurrentUserId()
+      try {
+        const userId = await getCurrentUserId()
 
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: userMessage,
-          user_id: userId,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        }),
-      })
+        const response = await fetch("/api/chat", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            message: userMessage,
+            user_id: userId,
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        if (response.status === 429) {
-          // Usage limit exceeded
-          throw new Error(`Usage limit exceeded: ${errorData.details}`)
+        if (!response.ok) {
+          const errorData = await response.json()
+          if (response.status === 429) {
+            // Usage limit exceeded
+            throw new Error(`Usage limit exceeded: ${errorData.details}`)
+          }
+          throw new Error("Failed to send message")
         }
-        throw new Error("Failed to send message")
-      }
 
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // Load enough messages to include the new response
-      const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
-      setMessages(recentMessages)
-      
-      onActivityChange?.()
-    } catch (error) {
-      console.error("Error sending message:", error)
-      setMessages((prev) => prev.filter((msg) => msg.id !== newUserMessage.id))
-      
-      // Show usage limit error with upgrade link
-      if (error instanceof Error && error.message.includes("Usage limit exceeded")) {
-        setMessages((prev) => [...prev, {
-          id: `error-${Date.now()}`,
-          role: "assistant" as const,
-          content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
-          created_at: new Date().toISOString(),
-          source: "system"
-        }])
+        await new Promise((resolve) => setTimeout(resolve, 300))
+
+        // Load enough messages to include the new response
+        const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
+        setMessages(recentMessages)
+
+        onActivityChange?.()
+      } catch (error) {
+        console.error("Error sending message:", error)
+        setMessages((prev) => prev.filter((msg) => msg.id !== newUserMessage.id))
+
+        // Show usage limit error with upgrade link
+        if (error instanceof Error && error.message.includes("Usage limit exceeded")) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `error-${Date.now()}`,
+              role: "assistant" as const,
+              content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
+              created_at: new Date().toISOString(),
+              source: "system",
+            },
+          ])
+        }
+      } finally {
+        setIsLoading(false)
       }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [input, isLoading, isRecording, messages.length, onActivityChange])
+    },
+    [input, isLoading, isRecording, messages.length, onActivityChange],
+  )
 
   // Don't render until ready
   if (!isClient || !isReady) {
@@ -514,99 +524,95 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   }
 
   return (
-    <div className="flex flex-col space-y-4">
-      <div className="flex flex-col h-[500px]">
-        <div className="flex-1 overflow-y-auto p-4" ref={messagesContainerRef}>
-          <div className="space-y-4">
-            {isLoadingMore && (
-              <div className="flex justify-center items-center py-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                <span className="ml-2 text-sm text-muted-foreground">Loading more...</span>
-              </div>
-            )}
-            {messages.length === 0 && (
-              <Card className="border-dashed">
-                <CardContent className="py-8">
-                  <p className="text-center text-muted-foreground text-sm">
-                    Type a message to start tracking your activities
-                  </p>
-                  <p className="text-center text-muted-foreground text-xs mt-2">
-                    Try: "I'm working" or "stop" or "start coding"
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div
-                  className={`max-w-[80%] rounded-lg px-4 py-2 ${
-                    message.role === "user"
-                      ? "bg-primary text-primary-foreground"
-                      : message.source === "n8n"
-                        ? "bg-blue-100 text-blue-900 border border-blue-200"
-                        : "bg-muted"
-                  }`}
-                >
-                  <p className="text-sm whitespace-pre-wrap">{message.content}</p>
-                  {(message.source === "n8n" || message.metadata?.from_ai) && (
-                    <div className="text-xs text-blue-600 mt-1">
-                      <p>{message.metadata?.from_ai ? "from AI" : "from n8n"}</p>
-                      {message.metadata?.action && <p className="text-blue-500">Action: {message.metadata.action}</p>}
+    <div className="flex flex-col h-[400px] sm:h-[500px]">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3" ref={messagesContainerRef} data-messages-container>
+        <div className="space-y-2">
+          {isLoadingMore && (
+            <div className="flex justify-center items-center py-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span className="ml-2 text-xs text-muted-foreground">Loading more...</span>
+            </div>
+          )}
+          {messages.length === 0 && (
+            <Card className="border-dashed">
+              <CardContent className="py-6 px-4">
+                <p className="text-center text-muted-foreground text-xs sm:text-sm">Type a message to start tracking</p>
+                <p className="text-center text-muted-foreground text-xs mt-2 opacity-75">
+                  Examples: "Working" or "Stop" or "Start coding"
+                </p>
+              </CardContent>
+            </Card>
+          )}
+          {messages.map((message) => (
+            <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2 text-sm ${
+                  message.role === "user"
+                    ? "bg-primary text-primary-foreground"
+                    : message.source === "n8n"
+                      ? "bg-blue-100 text-blue-900 border border-blue-200"
+                      : "bg-secondary text-secondary-foreground"
+                }`}
+              >
+                <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                {(message.source === "n8n" || message.metadata?.from_ai) && (
+                  <div className="text-xs mt-1 opacity-75">
+                    <p>{message.metadata?.from_ai ? "from AI" : "from n8n"}</p>
+                  </div>
+                )}
+
+                {pendingConfirmation &&
+                  pendingConfirmation.messageId === message.id &&
+                  (message.metadata?.action === "edit_activities" ||
+                    message.metadata?.action === "delete_activities" ||
+                    message.metadata?.action === "log_past") && (
+                    <div className="flex gap-2 mt-2">
+                      <Button
+                        size="sm"
+                        onClick={() => handleConfirmation(true)}
+                        className="bg-green-600 hover:bg-green-700 h-7 text-xs"
+                      >
+                        <Check className="h-3 w-3 mr-1" />
+                        Yes
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleConfirmation(false)}
+                        className="border-red-300 text-red-600 hover:bg-red-50 h-7 text-xs"
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        No
+                      </Button>
                     </div>
                   )}
-
-                  {pendingConfirmation &&
-                    pendingConfirmation.messageId === message.id &&
-                    (message.metadata?.action === "edit_activities" ||
-                      message.metadata?.action === "delete_activities" ||
-                      message.metadata?.action === "log_past") && (
-                      <div className="flex gap-2 mt-3">
-                        <Button
-                          size="sm"
-                          onClick={() => handleConfirmation(true)}
-                          className="bg-green-600 hover:bg-green-700"
-                        >
-                          <Check className="h-3 w-3 mr-1" />
-                          Yes
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleConfirmation(false)}
-                          className="border-red-300 text-red-600 hover:bg-red-50"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          No
-                        </Button>
-                      </div>
-                    )}
-                </div>
               </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-muted rounded-lg px-4 py-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                </div>
+            </div>
+          ))}
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-secondary rounded-2xl px-3 sm:px-4 py-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
               </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+            </div>
+          )}
+          <div ref={messagesEndRef} />
         </div>
-        <form onSubmit={handleSubmitWithVoice} className="flex gap-2 p-4 border-t">
+      </div>
+
+      <form onSubmit={handleSubmitWithVoice} className="p-3 sm:p-4 border-t space-y-2 bg-background">
+        {recognitionError && (
+          <div className="bg-destructive/10 text-destructive text-xs px-2 py-1.5 rounded">{recognitionError}</div>
+        )}
+        <div className="flex gap-2">
           <div className="flex-1 relative">
             <Input
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder={isRecording ? "Listening..." : "Start work activity"}
+              placeholder={isRecording ? "Listening..." : "What are you doing?"}
               disabled={isLoading}
-              className="flex-1 pr-10"
+              className="rounded-full text-sm h-9 sm:h-10"
             />
-            {recognitionError && (
-              <div className="absolute -top-8 left-0 right-0 bg-destructive text-destructive-foreground text-xs px-2 py-1 rounded">
-                {recognitionError}
-              </div>
-            )}
           </div>
           {isSpeechSupported && (
             <Button
@@ -615,21 +621,22 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
               disabled={isLoading}
               variant={isRecording ? "destructive" : "outline"}
               size="icon"
-              className={isRecording ? "animate-pulse" : ""}
+              className={`h-9 w-9 sm:h-10 sm:w-10 rounded-full flex-shrink-0 ${isRecording ? "animate-pulse" : ""}`}
               title={isRecording ? "Stop recording" : "Start voice input"}
             >
-              {isRecording ? (
-                <MicOff className="h-4 w-4" />
-              ) : (
-                <Mic className="h-4 w-4" />
-              )}
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
           )}
-          <Button type="submit" disabled={isLoading || !input.trim()} size="icon">
+          <Button
+            type="submit"
+            disabled={isLoading || !input.trim()}
+            size="icon"
+            className="h-9 w-9 sm:h-10 sm:w-10 rounded-full flex-shrink-0"
+          >
             <Send className="h-4 w-4" />
           </Button>
-        </form>
-      </div>
+        </div>
+      </form>
     </div>
   )
 }

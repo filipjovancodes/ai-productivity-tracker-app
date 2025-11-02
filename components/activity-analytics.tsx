@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Cell } from "recharts"
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
 import type { ActivityStats } from "@/lib/types"
-import { Clock, TrendingUp, BarChart3 } from "lucide-react"
+import { TrendingUp } from "lucide-react"
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts"
+import { Button } from "@/components/ui/button"
 
 interface ActivityAnalyticsProps {
   stats: ActivityStats[]
@@ -20,15 +20,16 @@ const COLORS = [
   "hsl(var(--chart-5))",
 ]
 
+type TimeRange = "7days" | "30days" | "90days" | "all"
+
 export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsProps) {
   const [currentStats, setCurrentStats] = useState<ActivityStats[]>(stats || [])
-  
-  // Initialize with props
+  const [timeRange, setTimeRange] = useState<TimeRange>("7days")
+
   useEffect(() => {
     setCurrentStats(stats || [])
   }, [stats])
-  
-  // Refresh stats when refreshTrigger changes (only if we have initial stats)
+
   useEffect(() => {
     if (refreshTrigger && refreshTrigger > 0 && stats && stats.length > 0) {
       const loadStats = async () => {
@@ -52,7 +53,7 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
 
   const chartData = (currentStats || []).map((stat) => ({
     name: stat.activity_name,
-    minutes: stat.total_minutes,
+    value: stat.total_minutes,
     hours: (stat.total_minutes / 60).toFixed(1),
     sessions: stat.session_count,
   }))
@@ -60,11 +61,10 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
   if (!currentStats || currentStats.length === 0) {
     return (
       <Card className="border-dashed">
-        <CardContent className="flex items-center justify-center py-12">
+        <CardContent className="flex items-center justify-center py-8">
           <div className="text-center">
-            <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground text-sm">No activity data yet</p>
-            <p className="text-muted-foreground text-xs mt-1">Start tracking to see your analytics</p>
+            <TrendingUp className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
+            <p className="text-muted-foreground text-xs sm:text-sm">No activity data yet</p>
           </div>
         </CardContent>
       </Card>
@@ -72,182 +72,122 @@ export function ActivityAnalytics({ stats, refreshTrigger }: ActivityAnalyticsPr
   }
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-2">
+    <div className="space-y-3">
+      <div className="flex gap-1.5 flex-wrap">
+        <Button
+          variant={timeRange === "7days" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setTimeRange("7days")}
+          className="text-xs h-8"
+        >
+          7 Days
+        </Button>
+        <Button
+          variant={timeRange === "30days" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setTimeRange("30days")}
+          className="text-xs h-8"
+        >
+          30 Days
+        </Button>
+        <Button
+          variant={timeRange === "90days" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setTimeRange("90days")}
+          className="text-xs h-8"
+        >
+          90 Days
+        </Button>
+        <Button
+          variant={timeRange === "all" ? "default" : "outline"}
+          size="sm"
+          onClick={() => setTimeRange("all")}
+          className="text-xs h-8"
+        >
+          All
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Time Tracked</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Total Time</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">
+            <div className="text-xl font-bold">
               {totalHours}h {remainingMinutes}m
             </div>
-            <p className="text-xs text-muted-foreground mt-1">Last 7 days</p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Sessions</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          <CardHeader className="pb-2">
+            <CardTitle className="text-xs font-medium text-muted-foreground">Sessions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{(currentStats || []).reduce((sum, stat) => sum + stat.session_count, 0)}</div>
-            <p className="text-xs text-muted-foreground mt-1">Across {(currentStats || []).length} activities</p>
+            <div className="text-xl font-bold">
+              {(currentStats || []).reduce((sum, stat) => sum + stat.session_count, 0)}
+            </div>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5" />
-            Activity Comparison
-          </CardTitle>
-          <CardDescription>Compare time spent across activities</CardDescription>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm">Activity Breakdown</CardTitle>
+          <CardDescription className="text-xs">
+            Last{" "}
+            {timeRange === "7days"
+              ? "7 days"
+              : timeRange === "30days"
+                ? "30 days"
+                : timeRange === "90days"
+                  ? "90 days"
+                  : "all time"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <ChartContainer
-            config={{
-              minutes: {
-                label: "Minutes",
-                color: "hsl(var(--chart-1))",
-              },
-            }}
-            className="h-[300px]"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData} layout="vertical">
-                <XAxis
-                  type="number"
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `${Math.floor(value / 60)}h`}
-                />
-                <YAxis type="category" dataKey="name" fontSize={12} tickLine={false} axisLine={false} width={100} />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value, name, props) => {
-                        const hours = Math.floor(Number(value) / 60)
-                        const mins = Number(value) % 60
-                        return (
-                          <div className="flex flex-col gap-1">
-                            <div>
-                              {hours}h {mins}m
-                            </div>
-                            <div className="text-xs text-muted-foreground">{props.payload.sessions} sessions</div>
-                          </div>
-                        )
-                      }}
-                    />
-                  }
-                />
-                <Bar dataKey="minutes" radius={[0, 8, 8, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+          <div className="flex flex-col gap-4">
+            {/* Pie Chart */}
+            <div className="h-48 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={chartData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={40}
+                    outerRadius={75}
+                    paddingAngle={2}
+                    dataKey="value"
+                  >
+                    {chartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Time by Activity</CardTitle>
-          <CardDescription>Your time breakdown for the last 7 days</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <ChartContainer
-            config={{
-              minutes: {
-                label: "Minutes",
-                color: "hsl(var(--chart-1))",
-              },
-            }}
-            className="h-[300px]"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis
-                  fontSize={12}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(value) => `${Math.floor(value / 60)}h`}
-                />
-                <ChartTooltip
-                  content={
-                    <ChartTooltipContent
-                      formatter={(value, name, props) => {
-                        const hours = Math.floor(Number(value) / 60)
-                        const mins = Number(value) % 60
-                        return (
-                          <div className="flex flex-col gap-1">
-                            <div>
-                              {hours}h {mins}m
-                            </div>
-                            <div className="text-xs text-muted-foreground">{props.payload.sessions} sessions</div>
-                          </div>
-                        )
-                      }}
-                    />
-                  }
-                />
-                <Bar dataKey="minutes" radius={[8, 8, 0, 0]}>
-                  {chartData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </ChartContainer>
-        </CardContent>
-      </Card>
+            {/* Legend with percentages */}
+            <div className="space-y-2">
+              {(currentStats || []).map((stat, index) => {
+                const percentage = ((stat.total_minutes / totalMinutes) * 100).toFixed(0)
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Activity Breakdown</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            {(currentStats || []).map((stat, index) => {
-              const hours = Math.floor(stat.total_minutes / 60)
-              const minutes = stat.total_minutes % 60
-              const percentage = ((stat.total_minutes / totalMinutes) * 100).toFixed(1)
-
-              return (
-                <div key={stat.activity_name} className="flex items-center gap-3">
-                  <div className="h-3 w-3 rounded-full" style={{ backgroundColor: COLORS[index % COLORS.length] }} />
-                  <div className="flex-1">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium">{stat.activity_name}</span>
-                      <span className="text-sm text-muted-foreground">
-                        {hours > 0 ? `${hours}h ` : ""}
-                        {minutes}m
-                      </span>
+                return (
+                  <div key={stat.activity_name} className="flex items-center justify-between text-xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className="h-3 w-3 rounded-full flex-shrink-0"
+                        style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                      />
+                      <span className="truncate font-medium">{stat.activity_name}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all"
-                          style={{
-                            width: `${percentage}%`,
-                            backgroundColor: COLORS[index % COLORS.length],
-                          }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground w-12 text-right">{percentage}%</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{stat.session_count} sessions</p>
+                    <span className="text-muted-foreground font-mono">{percentage}%</span>
                   </div>
-                </div>
-              )
-            })}
+                )
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>

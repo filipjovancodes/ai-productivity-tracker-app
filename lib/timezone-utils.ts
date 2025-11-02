@@ -303,4 +303,3 @@ export function convertAIResponseTimesToUTC(aiResponse: any, userTimezone: strin
 
   return aiResponse
 }
-

@@ -43,32 +43,32 @@ This document outlines the SEO optimizations implemented for AI Time Tracker.
 
 Add to your `.env.local` or production environment:
 
-```bash
+\`\`\`bash
 NEXT_PUBLIC_APP_URL=https://yourdomain.com
-```
+\`\`\`
 
 ### Optional: Social Media Verification
 
 Update `app/layout.tsx` with your verification codes:
 
-```typescript
+\`\`\`typescript
 verification: {
   google: 'your-google-verification-code',
   yandex: 'your-yandex-verification-code',
   yahoo: 'your-yahoo-verification-code',
 },
-```
+\`\`\`
 
 ### Optional: Twitter Handle
 
 Update `app/layout.tsx` with your Twitter handle:
 
-```typescript
+\`\`\`typescript
 twitter: {
   // ...
   creator: "@yourtwitterhandle",
 },
-```
+\`\`\`
 
 ## Next Steps
 
@@ -324,4 +324,3 @@ Use AI tools to extract information and verify:
 - [Google Search Central - Structured Data](https://developers.google.com/search/docs/appearance/structured-data)
 - [GEO-SEO Research](https://arxiv.org/abs/2402.08120) (Research paper on GEO-SEO)
 - [Perplexity Blog - AI Search](https://blog.perplexity.ai/)
-

@@ -37,31 +37,34 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
   const loadUsageData = async () => {
     try {
       const supabase = createClient()
-      
+
       console.log("Loading usage data...")
-      
+
       // Get current user
-      const { data: { user }, error: userError } = await supabase.auth.getUser()
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser()
       console.log("User data:", user, "User error:", userError)
-      
+
       if (userError || !user) {
         console.error("Error getting user:", userError)
         setUsage({
           current_usage: 0,
           usage_limit: 30,
           usage_percentage: 0,
-          plan_type: 'free'
+          plan_type: "free",
         })
         return
       }
-      
+
       // Get user subscription
-      const { data: subData, error: subError } = await supabase.rpc('get_user_subscription', {
-        p_user_id: user.id
+      const { data: subData, error: subError } = await supabase.rpc("get_user_subscription", {
+        p_user_id: user.id,
       })
-      
+
       console.log("Subscription data:", subData, "Error:", subError)
-      
+
       if (subError) {
         console.error("Error getting subscription:", subError)
         // Fallback to free plan
@@ -69,46 +72,45 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
           current_usage: 0,
           usage_limit: 30,
           usage_percentage: 0,
-          plan_type: 'free'
+          plan_type: "free",
         })
         return
       }
-      
+
       if (subData && subData.length > 0) {
         const subscription = subData[0]
         console.log("Found subscription:", subscription)
-        
+
         // Get usage data
-        const { data: usageCount, error: usageError } = await supabase.rpc('get_user_monthly_usage', {
+        const { data: usageCount, error: usageError } = await supabase.rpc("get_user_monthly_usage", {
           p_user_id: user.id,
-          p_usage_type: 'ai_message'
+          p_usage_type: "ai_message",
         })
-        
+
         console.log("Usage count:", usageCount, "Error:", usageError)
-        
-        const limit = subscription.plan_type === 'free' ? 30 : 
-                     subscription.plan_type === 'pro' ? 1000 : 999999
-        
+
+        const limit = subscription.plan_type === "free" ? 30 : subscription.plan_type === "pro" ? 1000 : 999999
+
         setUsage({
           current_usage: usageCount || 0,
           usage_limit: limit,
           usage_percentage: ((usageCount || 0) / limit) * 100,
-          plan_type: subscription.plan_type
+          plan_type: subscription.plan_type,
         })
       } else {
         console.log("No subscription found, creating free subscription automatically")
-        
+
         // Automatically create a free subscription
         try {
-          const createResponse = await fetch('/api/subscription/create-free', {
-            method: 'POST',
+          const createResponse = await fetch("/api/subscription/create-free", {
+            method: "POST",
             headers: {
-              'Content-Type': 'application/json',
-            }
+              "Content-Type": "application/json",
+            },
           })
-          
+
           const createResult = await createResponse.json()
-          
+
           if (createResult.success) {
             console.log("Free subscription created successfully")
             // Set usage to free plan
@@ -116,7 +118,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
               current_usage: 0,
               usage_limit: 30,
               usage_percentage: 0,
-              plan_type: 'free'
+              plan_type: "free",
             })
           } else {
             console.error("Failed to create free subscription:", createResult.error)
@@ -125,7 +127,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
               current_usage: 0,
               usage_limit: 30,
               usage_percentage: 0,
-              plan_type: 'free'
+              plan_type: "free",
             })
           }
         } catch (error) {
@@ -135,7 +137,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
             current_usage: 0,
             usage_limit: 30,
             usage_percentage: 0,
-            plan_type: 'free'
+            plan_type: "free",
           })
         }
       }
@@ -146,7 +148,7 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
         current_usage: 0,
         usage_limit: 30,
         usage_percentage: 0,
-        plan_type: 'free'
+        plan_type: "free",
       })
     } finally {
       setLoading(false)
@@ -156,11 +158,11 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
   if (loading) {
     console.log("UsageIndicator: Loading...")
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="border-0 bg-transparent">
+        <CardContent className="p-2">
           <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Loading usage...</span>
+            <Zap className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs text-muted-foreground">Loading usage...</span>
           </div>
         </CardContent>
       </Card>
@@ -170,11 +172,11 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
   if (!usage) {
     console.log("UsageIndicator: No usage data")
     return (
-      <Card>
-        <CardContent className="p-4">
+      <Card className="border-0 bg-transparent">
+        <CardContent className="p-2">
           <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Usage data unavailable</span>
+            <Zap className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs text-muted-foreground">Usage unavailable</span>
           </div>
         </CardContent>
       </Card>
@@ -186,48 +188,47 @@ export function UsageIndicator({ refreshTrigger }: UsageIndicatorProps) {
   const isNearLimit = usage.usage_percentage > 80
   const isAtLimit = usage.usage_percentage >= 100
 
-
   return (
-    <Card className={`${isNearLimit ? 'border-amber-200 bg-amber-50' : ''}`}>
-      <CardContent className="p-4">
-        <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2">
-            <Zap className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">AI Messages</span>
-            <Badge variant="secondary" className="text-xs">
+    <Card className={`border-0 ${isNearLimit ? "bg-amber-50 border border-amber-200" : "bg-transparent"}`}>
+      <CardContent className="p-2">
+        <div className="flex items-center justify-between gap-2 mb-1">
+          <div className="flex items-center gap-2 min-w-0">
+            <Zap className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+            <span className="text-xs font-medium">Messages</span>
+            <Badge variant="secondary" className="text-xs px-1.5 py-0">
               {usage.plan_type}
             </Badge>
           </div>
-          <span className="text-sm text-muted-foreground">
+          <span className="text-xs text-muted-foreground font-mono flex-shrink-0">
             {usage.current_usage} / {usage.usage_limit}
           </span>
         </div>
-        
-        <Progress value={usage.usage_percentage} className="h-2 mb-2" />
-        
+
+        <Progress value={usage.usage_percentage} className="h-1.5 mb-1.5" />
+
         {isNearLimit && !isAtLimit && (
-          <div className="flex items-center gap-2 text-amber-600 text-sm">
-            <AlertCircle className="h-4 w-4" />
-            <span>You're approaching your monthly limit</span>
+          <div className="flex items-center gap-1 text-amber-600 text-xs">
+            <AlertCircle className="h-3 w-3 flex-shrink-0" />
+            <span>Approaching limit</span>
           </div>
         )}
-        
+
         {isAtLimit && (
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-red-600 text-sm">
-              <AlertCircle className="h-4 w-4" />
-              <span>Monthly limit reached</span>
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1 text-red-600 text-xs">
+              <AlertCircle className="h-3 w-3 flex-shrink-0" />
+              <span>Limit reached</span>
             </div>
-            <Button size="sm" asChild>
+            <Button size="sm" asChild className="h-6 text-xs px-2">
               <Link href="/subscription">Upgrade</Link>
             </Button>
           </div>
         )}
-        
-        {usage.plan_type === 'free' && usage.usage_percentage > 50 && (
-          <div className="mt-2">
-            <Button size="sm" variant="outline" asChild className="w-full">
-              <Link href="/subscription">Upgrade for more messages</Link>
+
+        {usage.plan_type === "free" && usage.usage_percentage > 50 && !isAtLimit && (
+          <div className="mt-1.5">
+            <Button size="sm" variant="outline" asChild className="w-full h-6 text-xs bg-transparent">
+              <Link href="/subscription">Upgrade for more</Link>
             </Button>
           </div>
         )}

@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useCallback } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,7 +17,12 @@ interface CurrentActivityDisplayProps {
   topActivities?: string[]
 }
 
-export function CurrentActivityDisplay({ initialActivity, onActivityChange, refreshTrigger, topActivities }: CurrentActivityDisplayProps) {
+export function CurrentActivityDisplay({
+  initialActivity,
+  onActivityChange,
+  refreshTrigger,
+  topActivities,
+}: CurrentActivityDisplayProps) {
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [elapsed, setElapsed] = useState(0)
   const [isStopping, setIsStopping] = useState(false)
@@ -34,11 +39,11 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
       const refreshActivity = async () => {
         try {
           // Wait a bit to ensure database operations complete
-          await new Promise(resolve => setTimeout(resolve, 300))
-          
+          await new Promise((resolve) => setTimeout(resolve, 300))
+
           // Add cache busting with timestamp
           const response = await fetch(`/api/activities?current=true&_t=${Date.now()}`, {
-            cache: 'no-store'
+            cache: "no-store",
           })
           const data = await response.json()
           if (data.success && data.activity) {
@@ -49,7 +54,7 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
             setElapsed(0)
           }
         } catch (error) {
-          console.error('Error refreshing activity:', error)
+          console.error("Error refreshing activity:", error)
         }
       }
       refreshActivity()
@@ -85,10 +90,9 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
       }
 
       // Call database function directly to stop activity
-      const { data: stoppedActivityId, error } = await supabase
-        .rpc('stop_current_n8n_activity', {
-          p_user_id: user.id
-        })
+      const { data: stoppedActivityId, error } = await supabase.rpc("stop_current_n8n_activity", {
+        p_user_id: user.id,
+      })
 
       if (error) {
         throw new Error(`Failed to stop activity: ${error.message}`)
@@ -97,9 +101,9 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
       // Update UI immediately
       setActivity(null)
       setElapsed(0)
-      
+
       // Wait a bit then trigger refresh to ensure database is updated
-      await new Promise(resolve => setTimeout(resolve, 300))
+      await new Promise((resolve) => setTimeout(resolve, 300))
       onActivityChange?.()
     } catch (error) {
       console.error("Error stopping activity:", error)
@@ -112,8 +116,8 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
   if (!isClient) {
     return (
       <Card className="border-dashed">
-        <CardContent className="flex items-center justify-center py-8">
-          <p className="text-muted-foreground text-sm">Loading...</p>
+        <CardContent className="flex items-center justify-center py-6">
+          <p className="text-muted-foreground text-xs sm:text-sm">Loading...</p>
         </CardContent>
       </Card>
     )
@@ -122,12 +126,12 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
   if (!activity) {
     return (
       <Card className="border-dashed">
-        <CardContent className="py-8">
-          <div className="flex items-center justify-center mb-4">
-            <p className="text-muted-foreground text-sm">No active session</p>
+        <CardContent className="py-4">
+          <div className="flex items-center justify-center mb-3">
+            <p className="text-muted-foreground text-xs sm:text-sm">No active session</p>
           </div>
           {topActivities && topActivities.length > 0 && (
-            <div className="border-t pt-4">
+            <div className="border-t pt-3">
               <QuickActions
                 topActivities={topActivities}
                 hasCurrentActivity={false}
@@ -145,41 +149,38 @@ export function CurrentActivityDisplay({ initialActivity, onActivityChange, refr
 
   return (
     <Card className="border-primary/50 bg-primary/5">
-      <CardContent className="py-6">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10">
-              <Clock className="h-5 w-5 text-primary" />
+      <CardContent className="py-4">
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
+              <Clock className="h-4 w-4 text-primary" />
             </div>
-            <div>
-              <p className="font-medium text-lg">{activity.activity_name}</p>
-              <p className="text-sm text-muted-foreground">Currently active</p>
+            <div className="min-w-0">
+              <p className="font-medium text-sm truncate">{activity.activity_name}</p>
+              <p className="text-xs text-muted-foreground">Active now</p>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <Badge variant="secondary" className="text-lg font-mono px-4 py-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Badge variant="secondary" className="text-sm font-mono px-2 py-1">
               {hours > 0 ? `${hours}h ` : ""}
               {minutes}m
             </Badge>
-            <Button 
-              variant="destructive" 
+            <Button
+              variant="destructive"
               size="sm"
               onClick={handleStopActivity}
               disabled={isStopping}
+              className="text-xs h-7"
             >
-              <Square className="h-4 w-4 mr-2" />
-              {isStopping ? "Stopping..." : "Stop"}
+              <Square className="h-3 w-3 mr-1" />
+              Stop
             </Button>
           </div>
         </div>
-        
+
         {topActivities && topActivities.length > 0 && (
-          <div className="border-t pt-4">
-            <QuickActions
-              topActivities={topActivities}
-              hasCurrentActivity={true}
-              onActivityChange={onActivityChange}
-            />
+          <div className="border-t pt-3">
+            <QuickActions topActivities={topActivities} hasCurrentActivity={true} onActivityChange={onActivityChange} />
           </div>
         )}
       </CardContent>

@@ -26,7 +26,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
-import { Edit, Trash2, Calendar, Clock, ActivityIcon, Plus } from "lucide-react"
+import { Edit, Trash2, Clock, Plus } from "lucide-react"
 import { format } from "date-fns"
 import type { Activity } from "@/lib/types"
 
@@ -41,10 +41,10 @@ function convertUTCToDateTimeLocal(utcTimestamp: string): string {
   const date = new Date(utcTimestamp)
   // Get the local time string in YYYY-MM-DDTHH:mm format
   const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hours = String(date.getHours()).padStart(2, '0')
-  const minutes = String(date.getMinutes()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, "0")
+  const day = String(date.getDate()).padStart(2, "0")
+  const hours = String(date.getHours()).padStart(2, "0")
+  const minutes = String(date.getMinutes()).padStart(2, "0")
   return `${year}-${month}-${day}T${hours}:${minutes}`
 }
 
@@ -113,7 +113,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
     console.log("🔥🔥🔥 handleSaveEdit called 🔥🔥🔥")
     console.log("Editing activity:", editingActivity)
     console.log("Edit form:", editForm)
-    
+
     if (!editingActivity) {
       console.error("❌ No editing activity found")
       return
@@ -203,7 +203,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
         alert("Error updating activity: Invalid response from server")
         return
       }
-      
+
       console.log("✅ Response data:", data)
 
       if (data.success) {
@@ -218,9 +218,9 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
       }
     } catch (error) {
       console.error("❌ Error updating activity:", error)
-      console.error("Error details:", error instanceof Error ? error.message : 'Unknown error')
-      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace')
-      alert("Error updating activity: " + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error("Error details:", error instanceof Error ? error.message : "Unknown error")
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
+      alert("Error updating activity: " + (error instanceof Error ? error.message : "Unknown error"))
     }
   }
 
@@ -253,7 +253,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
   }
 
   const formatDate = (dateString: string) => {
-    return format(new Date(dateString), "MMM dd, yyyy 'at' h:mm a")
+    return format(new Date(dateString), "MMM dd, h:mm a")
   }
 
   const handleCreate = () => {
@@ -272,7 +272,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
   const handleSaveCreate = async () => {
     console.log("🔥🔥🔥 handleSaveCreate called 🔥🔥🔥")
     console.log("Create form:", editForm)
-    
+
     try {
       const payload = {
         activity_name: editForm.activity_name,
@@ -320,7 +320,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
         alert("Error creating activity: Invalid response from server")
         return
       }
-      
+
       console.log("✅ Response data:", data)
 
       if (data.success) {
@@ -330,13 +330,13 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
         setIsCreating(false)
       } else {
         console.error("❌ Create failed:", data.error)
-        alert("Error creating activity: " + (data.error || 'Unknown error'))
+        alert("Error creating activity: " + (data.error || "Unknown error"))
       }
     } catch (error) {
       console.error("❌ Error creating activity:", error)
-      console.error("Error details:", error instanceof Error ? error.message : 'Unknown error')
-      console.error("Error stack:", error instanceof Error ? error.stack : 'No stack trace')
-      alert("Error creating activity: " + (error instanceof Error ? error.message : 'Unknown error'))
+      console.error("Error details:", error instanceof Error ? error.message : "Unknown error")
+      console.error("Error stack:", error instanceof Error ? error.stack : "No stack trace")
+      alert("Error creating activity: " + (error instanceof Error ? error.message : "Unknown error"))
     }
   }
 
@@ -344,29 +344,25 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Activity Manager</CardTitle>
-          <CardDescription>Loading activities...</CardDescription>
+          <CardTitle className="text-lg">Activities</CardTitle>
+          <CardDescription className="text-xs">Loading...</CardDescription>
         </CardHeader>
       </Card>
     )
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex items-center justify-between">
-          <div>
-            <CardTitle className="flex items-center gap-2">
-              <ActivityIcon className="h-5 w-5" />
-              Activity Manager
-            </CardTitle>
-            <CardDescription>View, edit, and delete your activity sessions</CardDescription>
+    <Card className="border">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <CardTitle className="text-lg">Activities</CardTitle>
+            <CardDescription className="text-xs">Recent sessions</CardDescription>
           </div>
           <Dialog open={isCreating} onOpenChange={setIsCreating}>
             <DialogTrigger asChild>
-              <Button onClick={handleCreate}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Activity
+              <Button onClick={handleCreate} size="sm" className="flex-shrink-0">
+                <Plus className="h-4 w-4" />
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -424,122 +420,120 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
       </CardHeader>
       <CardContent>
         {activities.length === 0 ? (
-          <p className="text-muted-foreground text-center py-8">
+          <p className="text-muted-foreground text-center py-6 text-sm">
             No activities found. Start tracking to see your sessions here.
           </p>
         ) : (
-          <div className="space-y-4">
+          <div className="space-y-2">
             {activities.map((activity) => (
-              <div key={activity.id} className="border rounded-lg p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <h3 className="font-medium">{activity.activity_name}</h3>
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-4 w-4" />
-                        {formatDate(activity.started_at)}
-                      </div>
-                      {activity.ended_at && (
-                        <div className="flex items-center gap-1">
-                          <Clock className="h-4 w-4" />
-                          {formatDuration(activity.duration_minutes)}
-                        </div>
-                      )}
+              <div key={activity.id} className="border rounded p-3 space-y-2 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-medium truncate">{activity.activity_name}</h3>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
+                      <Clock className="h-3 w-3 flex-shrink-0" />
+                      <span className="truncate">{formatDate(activity.started_at)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={activity.ended_at ? "secondary" : "default"}>
-                      {activity.ended_at ? "Completed" : "Active"}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Badge variant={activity.ended_at ? "secondary" : "default"} className="text-xs">
+                      {activity.ended_at ? formatDuration(activity.duration_minutes) : "Active"}
                     </Badge>
-                    <Dialog open={isEditDialogOpen && editingActivity?.id === activity.id} onOpenChange={(open) => {
+                  </div>
+                </div>
+                <div className="flex items-center justify-end gap-1 pt-1 border-t">
+                  <Dialog
+                    open={isEditDialogOpen && editingActivity?.id === activity.id}
+                    onOpenChange={(open) => {
                       setIsEditDialogOpen(open)
                       if (!open) {
                         setEditingActivity(null)
                       }
-                    }}>
-                      <DialogTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => handleEdit(activity)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Edit Activity</DialogTitle>
-                          <DialogDescription>Update the details of this activity session.</DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-4">
-                          <div>
-                            <Label htmlFor="activity_name">Activity Name</Label>
-                            <Input
-                              id="activity_name"
-                              value={editForm.activity_name}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, activity_name: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="started_at">Start Time</Label>
-                            <Input
-                              id="started_at"
-                              type="datetime-local"
-                              value={editForm.started_at}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, started_at: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="ended_at">End Time</Label>
-                            <Input
-                              id="ended_at"
-                              type="datetime-local"
-                              value={editForm.ended_at}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="duration_minutes">Duration (minutes)</Label>
-                            <Input
-                              id="duration_minutes"
-                              type="number"
-                              value={editForm.duration_minutes}
-                              onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
-                            />
-                          </div>
+                    }}
+                  >
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8" onClick={() => handleEdit(activity)}>
+                        <Edit className="h-3.5 w-3.5" />
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Edit Activity</DialogTitle>
+                        <DialogDescription>Update the details of this activity session.</DialogDescription>
+                      </DialogHeader>
+                      <div className="space-y-4">
+                        <div>
+                          <Label htmlFor="activity_name">Activity Name</Label>
+                          <Input
+                            id="activity_name"
+                            value={editForm.activity_name}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, activity_name: e.target.value }))}
+                          />
                         </div>
-                        <DialogFooter>
-                          <Button variant="outline" onClick={() => {
+                        <div>
+                          <Label htmlFor="started_at">Start Time</Label>
+                          <Input
+                            id="started_at"
+                            type="datetime-local"
+                            value={editForm.started_at}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, started_at: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="ended_at">End Time</Label>
+                          <Input
+                            id="ended_at"
+                            type="datetime-local"
+                            value={editForm.ended_at}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="duration_minutes">Duration (minutes)</Label>
+                          <Input
+                            id="duration_minutes"
+                            type="number"
+                            value={editForm.duration_minutes}
+                            onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
+                          />
+                        </div>
+                      </div>
+                      <DialogFooter>
+                        <Button
+                          variant="outline"
+                          onClick={() => {
                             setIsEditDialogOpen(false)
                             setEditingActivity(null)
-                          }}>
-                            Cancel
-                          </Button>
-                          <Button onClick={handleSaveEdit}>Save Changes</Button>
-                        </DialogFooter>
-                      </DialogContent>
-                    </Dialog>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button variant="outline" size="sm">
-                          <Trash2 className="h-4 w-4" />
+                          }}
+                        >
+                          Cancel
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Activity</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete this activity? This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => handleDelete(activity.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                        <Button onClick={handleSaveEdit}>Save Changes</Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Activity</AlertDialogTitle>
+                        <AlertDialogDescription>Are you sure? This cannot be undone.</AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => handleDelete(activity.id)}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </div>
               </div>
             ))}
