@@ -5,7 +5,7 @@ import type React from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
-import { Send, Loader2, Check, X } from "lucide-react"
+import { Send, Loader2, Check, X, Mic, MicOff } from "lucide-react"
 import { useEffect, useState, useRef, useCallback } from "react"
 import { getRecentMessages, type ChatMessage } from "@/lib/message-service-client"
 import { createClient } from "@/lib/supabase/client"
@@ -46,12 +46,17 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   } | null>(null)
   const [isLoadingMore, setIsLoadingMore] = useState(false)
   const [hasMoreMessages, setHasMoreMessages] = useState(true)
+  const [isRecording, setIsRecording] = useState(false)
+  const [isSpeechSupported, setIsSpeechSupported] = useState(false)
+  const [recognitionError, setRecognitionError] = useState<string | null>(null)
   const isClient = useClientOnly()
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
   const lastMessageCountRef = useRef(0)
   const shouldScrollToBottomRef = useRef(true)
   const previousScrollHeightRef = useRef(0)
+  const recognitionRef = useRef<SpeechRecognition | null>(null)
+  const finalTranscriptRef = useRef<string>('')
 
   // Initialize messages on component mount
   useEffect(() => {
@@ -316,6 +321,187 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     }
   }
 
+  // Check for speech recognition support and initialize
+  useEffect(() => {
+    if (!isClient) return
+
+    // Check for browser support
+    const SpeechRecognition = window.SpeechRecognition || (window as any).webkitSpeechRecognition
+    
+    if (SpeechRecognition) {
+      setIsSpeechSupported(true)
+      
+      const recognition = new SpeechRecognition()
+      recognition.continuous = true
+      recognition.interimResults = true
+      recognition.lang = 'en-US'
+
+      recognition.onstart = () => {
+        setIsRecording(true)
+        setRecognitionError(null)
+        // Input is already preserved in finalTranscriptRef.current via toggleRecording
+      }
+
+      recognition.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = ''
+        let newFinalTranscript = ''
+
+        // Process all results from the event
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            newFinalTranscript += transcript + ' '
+            // Add to accumulated final transcript
+            finalTranscriptRef.current += transcript + ' '
+          } else {
+            interimTranscript += transcript
+          }
+        }
+
+        // Update input: existing base + new final results + current interim
+        setInput(finalTranscriptRef.current + interimTranscript)
+      }
+
+      recognition.onerror = (event: any) => {
+        console.error('Speech recognition error:', event.error)
+        setIsRecording(false)
+        
+        let errorMessage = 'Speech recognition error'
+        if (event.error === 'no-speech') {
+          errorMessage = 'No speech detected. Please try again.'
+        } else if (event.error === 'audio-capture') {
+          errorMessage = 'No microphone found. Please check your microphone.'
+        } else if (event.error === 'not-allowed') {
+          errorMessage = 'Microphone permission denied. Please allow microphone access.'
+        } else {
+          errorMessage = `Speech recognition error: ${event.error}`
+        }
+        
+        setRecognitionError(errorMessage)
+        
+        // Clear error after 5 seconds
+        setTimeout(() => setRecognitionError(null), 5000)
+      }
+
+      recognition.onend = () => {
+        setIsRecording(false)
+        // Finalize the transcript when recognition ends
+        setInput(finalTranscriptRef.current.trim())
+      }
+
+      recognitionRef.current = recognition
+    } else {
+      setIsSpeechSupported(false)
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop()
+        recognitionRef.current = null
+      }
+    }
+  }, [isClient])
+
+  const toggleRecording = useCallback(() => {
+    if (!recognitionRef.current) {
+      setRecognitionError('Speech recognition not supported in this browser')
+      return
+    }
+
+    if (isRecording) {
+      recognitionRef.current.stop()
+      setIsRecording(false)
+      // When stopping, ensure final transcript is in input (will be set in onend)
+    } else {
+      // Reset final transcript reference to current input (preserve typed text)
+      finalTranscriptRef.current = input.trim()
+      try {
+        recognitionRef.current.start()
+      } catch (error) {
+        console.error('Error starting recognition:', error)
+        setRecognitionError('Failed to start recording. Please try again.')
+        setIsRecording(false)
+      }
+    }
+  }, [isRecording, input])
+
+  // Also stop recording if user submits form while recording
+  const handleSubmitWithVoice = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!input.trim() || isLoading) return
+
+    // Stop recording if active
+    if (isRecording && recognitionRef.current) {
+      recognitionRef.current.stop()
+      // Wait a moment for onend to fire and finalize transcript
+      await new Promise(resolve => setTimeout(resolve, 200))
+    }
+
+    // Then proceed with normal submit
+    const userMessage = input.trim()
+    setInput("")
+    setIsLoading(true)
+    shouldScrollToBottomRef.current = true
+
+    const newUserMessage: ChatMessage = {
+      id: `temp-${Date.now()}`,
+      role: "user",
+      content: userMessage,
+      created_at: new Date().toISOString(),
+      source: "chat",
+    }
+    setMessages((prev) => [...prev, newUserMessage])
+
+    try {
+      const userId = await getCurrentUserId()
+
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          message: userMessage,
+          user_id: userId,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        if (response.status === 429) {
+          // Usage limit exceeded
+          throw new Error(`Usage limit exceeded: ${errorData.details}`)
+        }
+        throw new Error("Failed to send message")
+      }
+
+      await new Promise(resolve => setTimeout(resolve, 300))
+      
+      // Load enough messages to include the new response
+      const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
+      setMessages(recentMessages)
+      
+      onActivityChange?.()
+    } catch (error) {
+      console.error("Error sending message:", error)
+      setMessages((prev) => prev.filter((msg) => msg.id !== newUserMessage.id))
+      
+      // Show usage limit error with upgrade link
+      if (error instanceof Error && error.message.includes("Usage limit exceeded")) {
+        setMessages((prev) => [...prev, {
+          id: `error-${Date.now()}`,
+          role: "assistant" as const,
+          content: `❌ ${error.message}\n\n[Upgrade your plan](/subscription) to continue using AI features.`,
+          created_at: new Date().toISOString(),
+          source: "system"
+        }])
+      }
+    } finally {
+      setIsLoading(false)
+    }
+  }, [input, isLoading, isRecording, messages.length, onActivityChange])
+
   // Don't render until ready
   if (!isClient || !isReady) {
     return (
@@ -407,14 +593,38 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
             <div ref={messagesEndRef} />
           </div>
         </div>
-        <form onSubmit={handleSubmit} className="flex gap-2 p-4 border-t">
-          <Input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Start work activity"
-            disabled={isLoading}
-            className="flex-1"
-          />
+        <form onSubmit={handleSubmitWithVoice} className="flex gap-2 p-4 border-t">
+          <div className="flex-1 relative">
+            <Input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder={isRecording ? "Listening..." : "Start work activity"}
+              disabled={isLoading}
+              className="flex-1 pr-10"
+            />
+            {recognitionError && (
+              <div className="absolute -top-8 left-0 right-0 bg-destructive text-destructive-foreground text-xs px-2 py-1 rounded">
+                {recognitionError}
+              </div>
+            )}
+          </div>
+          {isSpeechSupported && (
+            <Button
+              type="button"
+              onClick={toggleRecording}
+              disabled={isLoading}
+              variant={isRecording ? "destructive" : "outline"}
+              size="icon"
+              className={isRecording ? "animate-pulse" : ""}
+              title={isRecording ? "Stop recording" : "Start voice input"}
+            >
+              {isRecording ? (
+                <MicOff className="h-4 w-4" />
+              ) : (
+                <Mic className="h-4 w-4" />
+              )}
+            </Button>
+          )}
           <Button type="submit" disabled={isLoading || !input.trim()} size="icon">
             <Send className="h-4 w-4" />
           </Button>
