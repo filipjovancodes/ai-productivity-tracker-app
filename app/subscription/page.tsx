@@ -6,6 +6,16 @@ import { createClient } from "@/lib/supabase/server"
 import { redirect } from "next/navigation"
 import { StripeCheckout } from "@/components/stripe-checkout"
 import Image from "next/image"
+import type { Metadata } from "next"
+
+export const metadata: Metadata = {
+  title: "Subscription Plans",
+  description: "Choose your AI Time Tracker plan. Free plan includes 30 AI messages per month. Upgrade to Pro or Premium for unlimited messages and advanced features.",
+  openGraph: {
+    title: "AI Time Tracker - Subscription Plans",
+    description: "Choose your AI Time Tracker plan. Free plan includes 30 AI messages per month. Upgrade to Pro or Premium for unlimited messages and advanced features.",
+  },
+}
 
 export default async function SubscriptionPage() {
   const supabase = await createClient()
@@ -17,8 +27,112 @@ export default async function SubscriptionPage() {
     redirect("/auth/login")
   }
 
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://aitimetracker.com'
+  
+  // Software Application schema with detailed offers
+  const softwareSchema = {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "AI Time Tracker",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web",
+    "offers": [
+      {
+        "@type": "Offer",
+        "name": "Free Plan",
+        "price": "0",
+        "priceCurrency": "USD",
+        "priceValidUntil": "2025-12-31",
+        "description": "30 AI messages per month, basic activity tracking, 7-day analytics, email support",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "0",
+          "priceCurrency": "USD",
+          "billingIncrement": "P1M"
+        }
+      },
+      {
+        "@type": "Offer",
+        "name": "Pro Plan",
+        "price": "5",
+        "priceCurrency": "USD",
+        "priceValidUntil": "2025-12-31",
+        "description": "1,000 AI messages per month, unlimited analytics, advanced tracking, CSV export, priority support, custom activity categories",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "5",
+          "priceCurrency": "USD",
+          "billingIncrement": "P1M"
+        }
+      },
+      {
+        "@type": "Offer",
+        "name": "Premium Plan",
+        "price": "10",
+        "priceCurrency": "USD",
+        "priceValidUntil": "2025-12-31",
+        "description": "Unlimited AI messages, unlimited analytics, all Pro features, API access, team collaboration",
+        "priceSpecification": {
+          "@type": "UnitPriceSpecification",
+          "price": "10",
+          "priceCurrency": "USD",
+          "billingIncrement": "P1M"
+        }
+      }
+    ]
+  }
+
+  // Pricing FAQ for subscription page
+  const pricingFaqSchema = {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "What features are included in the Free plan?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Free plan includes 30 AI messages per month, basic activity tracking, 7-day analytics, and email support. This is perfect for individuals getting started with time tracking."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What is the difference between Pro and Premium plans?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Pro plan ($5/month) includes 1,000 AI messages per month, unlimited analytics, CSV export, priority support, and custom categories. Premium plan ($10/month) includes unlimited AI messages, all Pro features, plus API access and team collaboration features."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I upgrade or downgrade my plan?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Yes, you can upgrade or downgrade your subscription plan at any time. Changes take effect immediately for upgrades, and downgrades apply at the next billing cycle."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "What happens if I exceed my AI message limit?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "If you exceed your monthly AI message limit on the Free or Pro plan, you'll be prompted to upgrade. The system will show your current usage and remaining messages. Premium users have unlimited messages."
+        }
+      }
+    ]
+  }
+
+  const structuredData = [softwareSchema, pricingFaqSchema]
+
   return (
     <div className="min-h-screen bg-background">
+      {structuredData.map((schema, index) => (
+        <script
+          key={index}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
+        />
+      ))}
       <header className="border-b">
         <div className="container mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
