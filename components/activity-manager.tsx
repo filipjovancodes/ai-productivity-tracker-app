@@ -66,7 +66,6 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
     activity_name: "",
     started_at: "",
     ended_at: "",
-    duration_minutes: "",
   })
 
   useEffect(() => {
@@ -104,7 +103,6 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
       activity_name: activity.activity_name,
       started_at: convertUTCToDateTimeLocal(activity.started_at),
       ended_at: activity.ended_at ? convertUTCToDateTimeLocal(activity.ended_at) : "",
-      duration_minutes: activity.duration_minutes?.toString() || "",
     })
     setIsEditDialogOpen(true)
   }
@@ -145,10 +143,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
         console.log("📝 End time changed to UTC:", utcEnd)
       }
 
-      if (editForm.duration_minutes !== (editingActivity.duration_minutes?.toString() || "")) {
-        updates.duration_minutes = editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null
-        console.log("📝 Duration changed:", updates.duration_minutes)
-      }
+      // Duration is automatically calculated from start/end times, no need to send it
 
       console.log("📦 Updates object:", updates)
 
@@ -265,7 +260,6 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
       activity_name: "",
       started_at: convertUTCToDateTimeLocal(oneHourAgo.toISOString()),
       ended_at: convertUTCToDateTimeLocal(now.toISOString()),
-      duration_minutes: "60",
     })
   }
 
@@ -278,7 +272,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
         activity_name: editForm.activity_name,
         started_at: convertDateTimeLocalToUTC(editForm.started_at),
         ended_at: editForm.ended_at ? convertDateTimeLocalToUTC(editForm.ended_at) : null,
-        duration_minutes: editForm.duration_minutes ? Number.parseInt(editForm.duration_minutes) : null,
+        // Duration is automatically calculated from start/end times
       }
       console.log("📤 Request payload:", JSON.stringify(payload, null, 2))
 
@@ -352,17 +346,17 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
   }
 
   return (
-    <Card className="border">
-      <CardHeader className="pb-3">
+    <Card className="border text-sm">
+      <CardHeader className="pb-2 pt-3 px-3">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            <CardTitle className="text-lg">Activities</CardTitle>
+            <CardTitle className="text-base sm:text-lg">Activities</CardTitle>
             <CardDescription className="text-xs">Recent sessions</CardDescription>
           </div>
           <Dialog open={isCreating} onOpenChange={setIsCreating}>
             <DialogTrigger asChild>
-              <Button onClick={handleCreate} size="sm" className="flex-shrink-0">
-                <Plus className="h-4 w-4" />
+              <Button onClick={handleCreate} size="sm" className="flex-shrink-0 h-7 w-7 p-0">
+                <Plus className="h-3.5 w-3.5" />
               </Button>
             </DialogTrigger>
             <DialogContent>
@@ -397,15 +391,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                     value={editForm.ended_at}
                     onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="new_duration_minutes">Duration (minutes)</Label>
-                  <Input
-                    id="new_duration_minutes"
-                    type="number"
-                    value={editForm.duration_minutes}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
-                  />
+                  <p className="text-xs text-muted-foreground mt-1">Duration is automatically calculated</p>
                 </div>
               </div>
               <DialogFooter>
@@ -418,25 +404,25 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="px-3 py-2">
         {activities.length === 0 ? (
-          <p className="text-muted-foreground text-center py-6 text-sm">
+          <p className="text-muted-foreground text-center py-4 text-xs">
             No activities found. Start tracking to see your sessions here.
           </p>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {activities.map((activity) => (
-              <div key={activity.id} className="border rounded p-3 space-y-2 text-sm">
+              <div key={activity.id} className="border rounded p-2 space-y-1.5 text-xs">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
-                    <h3 className="font-medium truncate">{activity.activity_name}</h3>
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
-                      <Clock className="h-3 w-3 flex-shrink-0" />
+                    <h3 className="font-medium truncate text-xs">{activity.activity_name}</h3>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5">
+                      <Clock className="h-2.5 w-2.5 flex-shrink-0" />
                       <span className="truncate">{formatDate(activity.started_at)}</span>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <Badge variant={activity.ended_at ? "secondary" : "default"} className="text-xs">
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <Badge variant={activity.ended_at ? "secondary" : "default"} className="text-[10px] px-1.5 py-0">
                       {activity.ended_at ? formatDuration(activity.duration_minutes) : "Active"}
                     </Badge>
                   </div>
@@ -452,8 +438,8 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                     }}
                   >
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8" onClick={() => handleEdit(activity)}>
-                        <Edit className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => handleEdit(activity)}>
+                        <Edit className="h-3 w-3" />
                       </Button>
                     </DialogTrigger>
                     <DialogContent>
@@ -487,15 +473,7 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                             value={editForm.ended_at}
                             onChange={(e) => setEditForm((prev) => ({ ...prev, ended_at: e.target.value }))}
                           />
-                        </div>
-                        <div>
-                          <Label htmlFor="duration_minutes">Duration (minutes)</Label>
-                          <Input
-                            id="duration_minutes"
-                            type="number"
-                            value={editForm.duration_minutes}
-                            onChange={(e) => setEditForm((prev) => ({ ...prev, duration_minutes: e.target.value }))}
-                          />
+                          <p className="text-xs text-muted-foreground mt-1">Duration is automatically calculated</p>
                         </div>
                       </div>
                       <DialogFooter>
@@ -514,8 +492,8 @@ export function ActivityManager({ onActivityChange, initialActivities, refreshTr
                   </Dialog>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="h-8 text-destructive hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-destructive hover:text-destructive">
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>

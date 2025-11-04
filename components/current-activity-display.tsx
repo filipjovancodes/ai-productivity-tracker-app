@@ -4,11 +4,14 @@ import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Clock, Square } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Clock, Square, Play } from "lucide-react"
 import type { Activity } from "@/lib/types"
 import { useClientOnly } from "@/lib/hooks/use-client-only"
 import { QuickActions } from "@/components/quick-actions"
 import { createClient } from "@/lib/supabase/client"
+import { startActivity } from "@/lib/activity-service"
+import { useRouter } from "next/navigation"
 
 interface CurrentActivityDisplayProps {
   initialActivity: Activity | null
@@ -26,7 +29,10 @@ export function CurrentActivityDisplay({
   const [activity, setActivity] = useState<Activity | null>(initialActivity)
   const [elapsed, setElapsed] = useState(0)
   const [isStopping, setIsStopping] = useState(false)
+  const [newActivityInput, setNewActivityInput] = useState("")
+  const [isStarting, setIsStarting] = useState(false)
   const isClient = useClientOnly()
+  const router = useRouter()
 
   useEffect(() => {
     setActivity(initialActivity)
@@ -73,6 +79,23 @@ export function CurrentActivityDisplay({
 
     return () => clearInterval(interval)
   }, [isClient, activity])
+
+  const handleStartNewActivity = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!newActivityInput.trim() || isStarting) return
+
+    setIsStarting(true)
+    try {
+      await startActivity(newActivityInput.trim())
+      setNewActivityInput("")
+      onActivityChange?.()
+      router.refresh()
+    } catch (error) {
+      console.error("Error starting activity:", error)
+    } finally {
+      setIsStarting(false)
+    }
+  }
 
   const handleStopActivity = async () => {
     if (!activity || isStopping) return
@@ -125,13 +148,29 @@ export function CurrentActivityDisplay({
 
   if (!activity) {
     return (
-      <Card className="border-dashed">
-        <CardContent className="py-4">
-          <div className="flex items-center justify-center mb-3">
-            <p className="text-muted-foreground text-xs sm:text-sm">No active session</p>
-          </div>
+      <Card className="border-dashed text-sm">
+        <CardContent className="py-3 px-3">
+          <form onSubmit={handleStartNewActivity} className="mb-3">
+            <div className="flex gap-2">
+              <Input
+                value={newActivityInput}
+                onChange={(e) => setNewActivityInput(e.target.value)}
+                placeholder="I'm working on..."
+                disabled={isStarting}
+                className="text-xs h-8 flex-1"
+              />
+              <Button
+                type="submit"
+                disabled={!newActivityInput.trim() || isStarting}
+                size="sm"
+                className="h-8 w-8 p-0 flex-shrink-0"
+              >
+                <Play className="h-4 w-4" />
+              </Button>
+            </div>
+          </form>
           {topActivities && topActivities.length > 0 && (
-            <div className="border-t pt-3">
+            <div className="border-t pt-2">
               <QuickActions
                 topActivities={topActivities}
                 hasCurrentActivity={false}
@@ -148,20 +187,20 @@ export function CurrentActivityDisplay({
   const minutes = elapsed % 60
 
   return (
-    <Card className="border-primary/50 bg-primary/5">
-      <CardContent className="py-4">
-        <div className="flex items-center justify-between gap-3 mb-3">
+    <Card className="border-primary/50 bg-primary/5 text-sm">
+      <CardContent className="py-3 px-3">
+        <div className="flex items-center justify-between gap-2 mb-2">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
-              <Clock className="h-4 w-4 text-primary" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-primary/10 flex-shrink-0">
+              <Clock className="h-3.5 w-3.5 text-primary" />
             </div>
             <div className="min-w-0">
-              <p className="font-medium text-sm truncate">{activity.activity_name}</p>
-              <p className="text-xs text-muted-foreground">Active now</p>
+              <p className="font-medium text-xs truncate">{activity.activity_name}</p>
+              <p className="text-[10px] text-muted-foreground">Active now</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <Badge variant="secondary" className="text-sm font-mono px-2 py-1">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            <Badge variant="secondary" className="text-xs font-mono px-1.5 py-0">
               {hours > 0 ? `${hours}h ` : ""}
               {minutes}m
             </Badge>
@@ -170,7 +209,7 @@ export function CurrentActivityDisplay({
               size="sm"
               onClick={handleStopActivity}
               disabled={isStopping}
-              className="text-xs h-7"
+              className="text-xs h-6 px-2"
             >
               <Square className="h-3 w-3 mr-1" />
               Stop
@@ -178,11 +217,6 @@ export function CurrentActivityDisplay({
           </div>
         </div>
 
-        {topActivities && topActivities.length > 0 && (
-          <div className="border-t pt-3">
-            <QuickActions topActivities={topActivities} hasCurrentActivity={true} onActivityChange={onActivityChange} />
-          </div>
-        )}
       </CardContent>
     </Card>
   )

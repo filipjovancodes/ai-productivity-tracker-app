@@ -105,15 +105,15 @@ export function HomeClient({
               AI Assistant
             </DrawerTitle>
           </DrawerHeader>
-          <div ref={chatRef} className="flex-1 overflow-hidden">
-            <Card className="h-full border-0 rounded-none">
+          <div ref={chatRef} className="flex-1 overflow-hidden flex flex-col">
+            <div className="flex-shrink-0 border-b px-4 py-2 bg-background">
+              <UsageIndicator refreshTrigger={refreshTrigger} />
+            </div>
+            <Card className="flex-1 border-0 rounded-none overflow-hidden">
               <CardContent className="p-0 h-full">
                 <ActivityChat initialMessages={recentMessages} onActivityChange={handleActivityChange} />
               </CardContent>
             </Card>
-          </div>
-          <div className="flex-shrink-0 border-t py-2 px-4 bg-background">
-            <UsageIndicator refreshTrigger={refreshTrigger} />
           </div>
         </DrawerContent>
       </Drawer>

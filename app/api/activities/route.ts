@@ -36,13 +36,29 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
+    // Calculate duration if both start and end times are provided
+    let calculatedDuration: number | null = null
+    if (started_at && ended_at) {
+      const startTime = new Date(started_at)
+      let endTime = new Date(ended_at)
+      
+      // If end time is earlier than start time, it likely crosses midnight
+      // Add 24 hours (1 day) to end time to account for this
+      if (endTime.getTime() < startTime.getTime()) {
+        endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000)
+      }
+      
+      calculatedDuration = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+      console.log("⏱️ Calculated duration:", calculatedDuration, "minutes")
+    }
+
     console.log("🔄 Calling insertActivity function...")
     const result = await insertActivity({
       user_id: user.id,
       activity_name,
       started_at,
       ended_at,
-      duration_minutes
+      duration_minutes: calculatedDuration ?? duration_minutes ?? null
     })
     console.log("✅ insertActivity result:", JSON.stringify(result, null, 2))
 

@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-import type { SpeechRecognition, SpeechRecognitionEvent } from "webkit-speech-api"
 
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -186,24 +185,66 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
     }
   }, [messages.length, onActivityChange])
 
+  // Ref to track the last message ID we set confirmation for
+  const lastConfirmationMessageIdRef = useRef<string | null>(null)
+
   // Check for confirmation requests and handle auto-scroll
   useEffect(() => {
     if (!isClient || !isReady || messages.length === 0) return
 
-    const lastMessage = messages[messages.length - 1]
-    if (lastMessage.role === "assistant" && lastMessage.metadata?.action) {
-      const action = lastMessage.metadata.action
-      if (
-        (action === "edit_activities" || action === "delete_activities" || action === "log_past") &&
-        lastMessage.content.includes("Would you like")
-      ) {
-        setPendingConfirmation({
-          messageId: lastMessage.id,
-          action: action,
-          data: lastMessage.metadata,
-        })
-      } else {
+    // Find the last assistant message that needs confirmation
+    // Only show confirmation if the message state is 'pending'
+    let foundConfirmationMessage: { messageId: string; action: string; data: any } | null = null
+    
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const message = messages[i]
+      if (message.role === "assistant" && message.metadata?.action) {
+        const action = message.metadata.action
+        const confirmationState = message.confirmation_state
+        
+        // Only show confirmation if:
+        // 1. It's a confirmable action
+        // 2. The message asks for confirmation
+        // 3. The confirmation_state is 'pending' (not confirmed, cancelled, or null)
+        const hasConfirmationPrompt = message.content.includes("Would you like")
+        
+        if (
+          (action === "edit_activities" || action === "delete_activities" || action === "log_past") &&
+          hasConfirmationPrompt &&
+          confirmationState === 'pending'
+        ) {
+          foundConfirmationMessage = {
+            messageId: message.id,
+            action: action,
+            data: message.metadata,
+          }
+          break
+        }
+      }
+    }
+
+    // Only update pendingConfirmation if it's different from what we last set
+    if (foundConfirmationMessage) {
+      // Only set if it's different from what we last set
+      // Also double-check that the message state is still pending
+      const message = messages.find(m => m.id === foundConfirmationMessage.messageId)
+      if (message && 
+          lastConfirmationMessageIdRef.current !== foundConfirmationMessage.messageId &&
+          message.confirmation_state === 'pending') {
+        setPendingConfirmation(foundConfirmationMessage)
+        lastConfirmationMessageIdRef.current = foundConfirmationMessage.messageId
+      } else if (message && message.confirmation_state !== 'pending') {
+        // Message was already processed, clear confirmation
+        if (lastConfirmationMessageIdRef.current === foundConfirmationMessage.messageId) {
+          setPendingConfirmation(null)
+          lastConfirmationMessageIdRef.current = null
+        }
+      }
+    } else {
+      // No confirmation message found, clear if we had one set
+      if (lastConfirmationMessageIdRef.current !== null) {
         setPendingConfirmation(null)
+        lastConfirmationMessageIdRef.current = null
       }
     }
 
@@ -219,6 +260,24 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!input.trim() || isLoading) return
+
+      // If there's a pending confirmation, cancel it when user types anything
+      if (pendingConfirmation) {
+        setPendingConfirmation(null)
+        lastConfirmationMessageIdRef.current = null
+        // Update the message confirmation_state to cancelled (keep original content)
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === pendingConfirmation.messageId) {
+              return {
+                ...msg,
+                confirmation_state: 'cancelled' as const,
+              }
+            }
+            return msg
+          })
+        )
+      }
 
     const userMessage = input.trim()
     setInput("")
@@ -290,10 +349,45 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
   const handleConfirmation = async (confirmed: boolean) => {
     if (!pendingConfirmation) return
 
-    setIsLoading(true)
-    setPendingConfirmation(null)
-    shouldScrollToBottomRef.current = true
+    const confirmationMessage = pendingConfirmation.messageId
+    const isYes = confirmed
 
+    // Hide the confirmation buttons immediately
+    setPendingConfirmation(null)
+    lastConfirmationMessageIdRef.current = null
+
+    // Update confirmation_state optimistically (keep original message content)
+    setMessages((prev) =>
+      prev.map((msg) => {
+        if (msg.id === confirmationMessage) {
+          return {
+            ...msg,
+            confirmation_state: isYes ? 'confirmed' as const : 'cancelled' as const,
+          }
+        }
+        return msg
+      })
+    )
+
+    // If cancelled, update database and return - no API call needed
+    if (!isYes) {
+      // Update database with cancelled state
+      try {
+        const userId = await getCurrentUserId()
+        const supabase = createClient()
+        await supabase
+          .from('messages')
+          .update({ confirmation_state: 'cancelled' })
+          .eq('id', confirmationMessage)
+          .eq('user_id', userId)
+      } catch (error) {
+        console.error("Error updating cancellation state:", error)
+      }
+      onActivityChange?.()
+      return
+    }
+
+    // Call API only if confirmed
     try {
       const userId = await getCurrentUserId()
       const response = await fetch("/api/chat", {
@@ -302,26 +396,63 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          message: confirmed ? "yes" : "no",
+          message: "yes",
+          messageId: confirmationMessage,
+          isConfirmationRequest: true,
           user_id: userId,
           timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to send confirmation")
+        const errorData = await response.json()
+        // Update the message state to cancelled (for errors)
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === confirmationMessage) {
+              return {
+                ...msg,
+                confirmation_state: 'cancelled' as const,
+              }
+            }
+            return msg
+          })
+        )
+        return
       }
 
-      await new Promise((resolve) => setTimeout(resolve, 300))
+      const data = await response.json()
 
-      const recentMessages = await getRecentMessages(Math.max(messages.length + 2, 6))
+      // Handle "already processed" case - just update with the stored message
+      if (data.action === "confirmation_already_processed") {
+        // Message already has confirmation state in database
+        // Just refresh messages from database to get the latest state
+        const recentMessages = await getRecentMessages(Math.max(messages.length, 6))
+        setMessages(recentMessages)
+        onActivityChange?.()
+        return
+      }
+
+      // Update the message state with confirmed (already set optimistically above)
+      // Database was updated by the API, just refresh to ensure consistency
+      const recentMessages = await getRecentMessages(Math.max(messages.length, 6))
       setMessages(recentMessages)
 
       onActivityChange?.()
     } catch (error) {
       console.error("Error sending confirmation:", error)
-    } finally {
-      setIsLoading(false)
+      // Update the message state to cancelled (for errors)
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id === confirmationMessage) {
+            return {
+              ...msg,
+              confirmation_state: 'cancelled' as const,
+            }
+          }
+          return msg
+        })
+      )
     }
   }
 
@@ -442,6 +573,24 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
         await new Promise((resolve) => setTimeout(resolve, 200))
       }
 
+      // If there's a pending confirmation, cancel it when user types anything
+      if (pendingConfirmation) {
+        setPendingConfirmation(null)
+        lastConfirmationMessageIdRef.current = null
+        // Update the message confirmation_state to cancelled (keep original content)
+        setMessages((prev) =>
+          prev.map((msg) => {
+            if (msg.id === pendingConfirmation.messageId) {
+              return {
+                ...msg,
+                confirmation_state: 'cancelled' as const,
+              }
+            }
+            return msg
+          })
+        )
+      }
+
       // Then proceed with normal submit
       const userMessage = input.trim()
       setInput("")
@@ -546,7 +695,7 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
           {messages.map((message) => (
             <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
               <div
-                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2 text-sm ${
+                className={`max-w-[85%] sm:max-w-[75%] rounded-2xl px-3 sm:px-4 py-2 text-sm select-text ${
                   message.role === "user"
                     ? "bg-primary text-primary-foreground"
                     : message.source === "n8n"
@@ -554,15 +703,18 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
                       : "bg-secondary text-secondary-foreground"
                 }`}
               >
-                <p className="whitespace-pre-wrap break-words text-sm">{message.content}</p>
+                <p className="whitespace-pre-wrap break-words text-sm select-text">{message.content}</p>
                 {(message.source === "n8n" || message.metadata?.from_ai) && (
                   <div className="text-xs mt-1 opacity-75">
                     <p>{message.metadata?.from_ai ? "from AI" : "from n8n"}</p>
                   </div>
                 )}
 
+                {/* Show confirmation buttons if pending */}
                 {pendingConfirmation &&
                   pendingConfirmation.messageId === message.id &&
+                  message.confirmation_state === 'pending' &&
+                  message.content.includes("Would you like") &&
                   (message.metadata?.action === "edit_activities" ||
                     message.metadata?.action === "delete_activities" ||
                     message.metadata?.action === "log_past") && (
@@ -586,6 +738,22 @@ export function ActivityChat({ onActivityChange, initialMessages }: ActivityChat
                       </Button>
                     </div>
                   )}
+                
+                {/* Show confirmation status instead of buttons if already processed */}
+                {message.confirmation_state === 'confirmed' && (
+                  <div className="mt-2 text-xs">
+                    <p className="text-green-600">
+                      ✅ Operation confirmed.
+                    </p>
+                  </div>
+                )}
+                {message.confirmation_state === 'cancelled' && (
+                  <div className="mt-2 text-xs">
+                    <p className="text-red-600">
+                      ❌ Operation cancelled.
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           ))}

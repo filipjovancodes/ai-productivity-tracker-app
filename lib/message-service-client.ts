@@ -10,6 +10,7 @@ export interface ChatMessage {
   source: string
   activity_id?: string
   metadata?: any
+  confirmation_state?: 'pending' | 'confirmed' | 'cancelled' | null
 }
 
 export async function getRecentMessages(limit = 50, beforeTimestamp?: string): Promise<ChatMessage[]> {

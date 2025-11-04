@@ -48,15 +48,52 @@ export async function PUT(
       return NextResponse.json({ error: "Activity ID is required" }, { status: 400 })
     }
 
+    // First, fetch the current activity to get existing values
+    const currentActivity = await getActivityDetails(activityId)
+    if (!currentActivity.success || !currentActivity.activity) {
+      console.error("❌ Activity not found")
+      return NextResponse.json({ error: "Activity not found" }, { status: 404 })
+    }
+
+    const existingActivity = currentActivity.activity
+    console.log("📋 Current activity:", JSON.stringify(existingActivity, null, 2))
+
     const { activity_name, started_at, ended_at, duration_minutes } = body
-    console.log("📝 Update fields:", { activity_name, started_at, ended_at, duration_minutes })
+    console.log("📝 Update fields from request:", { activity_name, started_at, ended_at, duration_minutes })
+
+    // Merge updates with existing values - use provided value or keep existing
+    const finalStartedAt = started_at ?? existingActivity.started_at
+    const finalEndedAt = ended_at !== undefined ? ended_at : existingActivity.ended_at
+    const finalActivityName = activity_name ?? existingActivity.activity_name
+
+    console.log("📋 Final values after merge:", { 
+      activity_name: finalActivityName, 
+      started_at: finalStartedAt, 
+      ended_at: finalEndedAt 
+    })
+
+    // Calculate duration if we have both start and end times
+    let calculatedDuration: number | undefined = undefined
+    if (finalStartedAt && finalEndedAt) {
+      const startTime = new Date(finalStartedAt)
+      let endTime = new Date(finalEndedAt)
+      
+      // If end time is earlier than start time, it likely crosses midnight
+      // Add 24 hours (1 day) to end time to account for this
+      if (endTime.getTime() < startTime.getTime()) {
+        endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000)
+      }
+      
+      calculatedDuration = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+      console.log("⏱️ Calculated duration:", calculatedDuration, "minutes")
+    }
 
     console.log("🔄 Calling updateActivity function...")
     const result = await updateActivity(activityId, {
-      activity_name,
-      started_at,
-      ended_at,
-      duration_minutes
+      activity_name: finalActivityName,
+      started_at: finalStartedAt,
+      ended_at: finalEndedAt,
+      duration_minutes: calculatedDuration ?? duration_minutes
     })
     console.log("✅ updateActivity result:", JSON.stringify(result, null, 2))
 

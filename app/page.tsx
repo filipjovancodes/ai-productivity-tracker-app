@@ -179,8 +179,8 @@ export default async function Home() {
               <div className="relative h-8 w-8 flex-shrink-0 sm:h-9 sm:w-9">
                 <Image src="/logo.png" alt="AI Time Tracker" fill className="object-contain" priority />
               </div>
-              <div className="min-w-0 hidden sm:block">
-                <h1 className="text-sm font-semibold">AI Time Tracker</h1>
+              <div className="min-w-0">
+                <h1 className="text-xs sm:text-sm font-semibold">AI Time Tracker</h1>
               </div>
             </a>
             <div className="flex items-center gap-3 flex-shrink-0">

@@ -111,13 +111,9 @@ export function convertLocalISOToUTC(localTimestamp: string, userTimezone: strin
     
     const [, year, month, day, hour, minute, second] = match
     
-    // Use Intl.DateTimeFormat to find the UTC time that represents this local time
-    // We'll iterate to find the correct UTC time
-    // Start with an approximate UTC time
-    const localDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`)
+    // Strategy: Use a formatter to find the UTC time that produces the desired local time
+    // We'll test UTC times and verify the formatted result matches our target
     
-    // Get timezone offset for this date in the user's timezone
-    // Create a date in UTC and see what it looks like in user's timezone
     const formatter = new Intl.DateTimeFormat('en-CA', {
       timeZone: userTimezone,
       year: 'numeric',
@@ -129,52 +125,80 @@ export function convertLocalISOToUTC(localTimestamp: string, userTimezone: strin
       hour12: false
     })
     
-    // Try different UTC times until we find one that formats to our local time
-    // Start with assuming the time is UTC-0 (midnight UTC = midnight local)
-    // Then adjust based on the actual timezone offset
-    let testUTC = new Date(`${year}-${month}-${day}T00:00:00Z`)
+    // Target: we want a UTC time that formats to YYYY-MM-DD HH:MM:SS in the user's timezone
+    const targetStr = `${year}-${month}-${day} ${hour.padStart(2, '0')}:${minute.padStart(2, '0')}:${second.padStart(2, '0')}`
     
-    // Get what this UTC time looks like in the user's timezone
-    let localTimeStr = formatter.format(testUTC)
-    const parts1 = localTimeStr.match(/(\d{4})-(\d{2})-(\d{2}),?\s*(\d{2}):(\d{2}):(\d{2})/)
+    // Start searching from the target date at midnight UTC
+    // Try different UTC times systematically
+    const baseDate = new Date(`${year}-${month}-${day}T00:00:00Z`)
     
-    if (!parts1) {
-      // Fallback to simpler method
-      const utcDate = new Date(`${year}-${month}-${day}T${hour}:${minute}:${second}`)
-      const offset = utcDate.getTimezoneOffset() * 60000
-      const result = new Date(utcDate.getTime() - offset)
-      return result.toISOString()
+    // Strategy: Search for the UTC time that produces the exact local time
+    // For most timezones, we'll find it within ±14 hours from the target date's midnight UTC
+    // But we also need to account for date boundaries
+    
+    // Search range: -14 to +14 hours from midnight UTC (covers most timezones)
+    // Also check one day before and after to handle timezone offsets that cross date boundaries
+    const searchRanges = [
+      [-14, 14], // Same day
+      [-38, -14], // Previous day
+      [14, 38], // Next day
+    ]
+    
+    for (const [startOffset, endOffset] of searchRanges) {
+      for (let offsetHours = startOffset; offsetHours <= endOffset; offsetHours++) {
+        const testUTC = new Date(baseDate.getTime() + offsetHours * 3600 * 1000)
+        const formatted = formatter.format(testUTC)
+        
+        // Format is "YYYY-MM-DD, HH:MM:SS" or "YYYY-MM-DD HH:MM:SS"
+        const cleanFormatted = formatted.replace(/,/g, '').trim()
+        
+        // Parse the formatted date
+        const dateMatch = cleanFormatted.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/)
+        if (!dateMatch) continue
+        
+        const formattedYear = dateMatch[1]
+        const formattedMonth = dateMatch[2]
+        const formattedDay = dateMatch[3]
+        const formattedHour = dateMatch[4]
+        const formattedMinute = dateMatch[5]
+        
+        // Check if the date and hour match exactly
+        if (formattedYear === year && formattedMonth === month && formattedDay === day && formattedHour === hour.padStart(2, '0')) {
+          // Adjust for the exact minute
+          const minuteDiff = parseInt(minute) - parseInt(formattedMinute)
+          const finalUTC = new Date(testUTC.getTime() + minuteDiff * 60 * 1000)
+          
+          // Verify the final result
+          const verifyFormatted = formatter.format(finalUTC)
+          const verifyClean = verifyFormatted.replace(/,/g, '').trim()
+          const verifyMatch = verifyClean.match(/(\d{4})-(\d{2})-(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/)
+          
+          if (verifyMatch) {
+            if (verifyMatch[1] === year && verifyMatch[2] === month && verifyMatch[3] === day &&
+                verifyMatch[4] === hour.padStart(2, '0') && verifyMatch[5] === minute.padStart(2, '0')) {
+              console.log(`Verification passed: ${verifyClean} matches ${targetStr}`)
+              console.log(`Final UTC result: ${finalUTC.toISOString()}`)
+              return finalUTC.toISOString()
+            }
+          }
+        }
+      }
     }
     
-    // Calculate offset: we want hour:minute in local time
-    // If testUTC at midnight gives us a certain local time, we can calculate the offset
-    const testHour = parseInt(parts1[4])
-    const testMinute = parseInt(parts1[5])
-    
-    // The offset in hours is (testHour - 0) if testUTC is midnight
-    // But we need to account for the actual desired hour
-    // More reliable: use the difference between desired local time and test result
-    const desiredHour = parseInt(hour)
-    const desiredMinute = parseInt(minute)
-    
-    // Create a date at the desired local time by adding the offset
-    // The offset is: (desiredHour - testHour) hours
-    const hourOffset = desiredHour - testHour
-    const minuteOffset = desiredMinute - testMinute
-    const totalOffsetMs = (hourOffset * 3600 + minuteOffset * 60) * 1000
-    
-    // Adjust testUTC by the offset
-    const resultUTC = new Date(testUTC.getTime() + totalOffsetMs)
-    
-    // Verify by formatting resultUTC and checking it matches our desired time
-    const verifyStr = formatter.format(resultUTC)
-    console.log(`Verification: ${verifyStr} should be ${year}-${month}-${day} ${hour}:${minute}:${second}`)
-    
-    console.log(`Final UTC result: ${resultUTC.toISOString()}`)
-    return resultUTC.toISOString()
+    throw new Error(`Could not find UTC time that produces ${localTimestamp} in ${userTimezone}`)
   } catch (error) {
     console.error('Error converting local ISO to UTC:', error, localTimestamp)
-    // Fallback: assume it's already UTC
+    // Fallback: try using the date constructor (may use server timezone, not ideal)
+    try {
+      const date = new Date(localTimestamp)
+      if (!isNaN(date.getTime())) {
+        // This won't be correct but prevents crashes
+        console.warn('Using fallback conversion (may be incorrect):', date.toISOString())
+        return date.toISOString()
+      }
+    } catch {}
+    
+    // Last resort: assume it's already UTC
     return localTimestamp.endsWith('Z') ? localTimestamp : `${localTimestamp}Z`
   }
 }

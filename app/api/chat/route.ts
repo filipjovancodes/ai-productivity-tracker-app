@@ -53,7 +53,25 @@ export async function POST(req: NextRequest) {
       }, { status: 429 })
     }
 
-    // Store user message
+    // Check if this is a confirmation request
+    const { messageId, isConfirmationRequest } = body
+    
+    if (isConfirmationRequest && messageId) {
+      // Handle confirmation - retrieve stored data and execute
+      // Do NOT store a user message for confirmation
+      const aiResponse = await handleConfirmation(messageId, message, user_id, userTimezone)
+      
+      // Return the result - frontend will update the message in place
+      return NextResponse.json({
+        success: true,
+        action: aiResponse.action,
+        message: aiResponse.outputMessage,
+        activityId: aiResponse.activityId,
+        activityIds: aiResponse.activityIds
+      })
+    }
+
+    // Regular chat flow - store user message
     const { data: userMessageId, error: userMessageError } = await supabase
       .rpc('insert_n8n_message', {
         p_user_id: user_id,
@@ -71,90 +89,37 @@ export async function POST(req: NextRequest) {
       console.error("❌ Error storing user message:", userMessageError)
     }
 
-    // Check if this is a confirmation response
-    const isConfirmation = message.toLowerCase().includes('yes') || message.toLowerCase().includes('no') || message.toLowerCase().includes('confirm')
-    
-    let aiResponse
-    if (isConfirmation) {
-      // Handle confirmation - retrieve stored data and execute
-      aiResponse = await handleConfirmation(message, user_id, userTimezone)
-      // aiResponse from handleConfirmation is already formatted for return
-    } else {
-      // Call AI to parse the user message
-      aiResponse = await callAIForProductivityParsing(message, user_id, userTimezone)
-      console.log("🤖 AI Response (raw):", JSON.stringify(aiResponse, null, 2))
-    }
+    // Call AI to parse the user message
+    let aiResponse = await callAIForProductivityParsing(message, user_id, userTimezone)
+    console.log("🤖 AI Response (raw):", JSON.stringify(aiResponse, null, 2))
 
-    // Process the AI response (only for non-confirmation flows)
-    // For confirmation, handleConfirmation already processed everything
+    // Process the AI response
     let result
-    if (!isConfirmation) {
-      // For log_past, DON'T convert yet - store LOCAL times for confirmation
-      // For other actions, convert times to UTC BEFORE processing
-      if (aiResponse.action === 'log_past') {
-        // Keep LOCAL times - conversion happens on confirmation
-        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
-      } else if (aiResponse.action !== 'start_activity' && aiResponse.action !== 'stop_activity' && aiResponse.action !== 'unsure') {
-        // Convert times to UTC for other actions (edit, delete, etc)
-        console.log('🔄 Converting times to UTC...')
-        console.log('Before conversion:', JSON.stringify(aiResponse, null, 2))
-        aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
-        console.log('After conversion:', JSON.stringify(aiResponse, null, 2))
-        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
-      } else {
-        // start_activity, stop_activity, unsure - no conversion needed
-        result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
-      }
+    // For log_past, DON'T convert yet - store LOCAL times for confirmation
+    // For other actions, convert times to UTC BEFORE processing
+    if (aiResponse.action === 'log_past') {
+      // Keep LOCAL times - conversion happens on confirmation
+      result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
+    } else if (aiResponse.action !== 'start_activity' && aiResponse.action !== 'stop_activity' && aiResponse.action !== 'unsure') {
+      // Convert times to UTC for other actions (edit, delete, etc)
+      console.log('🔄 Converting times to UTC...')
+      console.log('Before conversion:', JSON.stringify(aiResponse, null, 2))
+      aiResponse = convertAIResponseTimesToUTC(aiResponse, userTimezone)
+      console.log('After conversion:', JSON.stringify(aiResponse, null, 2))
+      result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
     } else {
-      // For confirmation, handleConfirmation already processed everything
-      // aiResponse contains the result from handleConfirmation
-      const activityId = (aiResponse as any).activityId || ((aiResponse as any).activityIds && (aiResponse as any).activityIds[0]) || null
-      
-      const { data: aiMessageId, error: aiMessageError } = await supabase
-        .rpc('insert_n8n_message', {
-          p_user_id: user_id,
-          p_content: aiResponse.outputMessage,
-          p_activity_id: activityId,
-          p_role: 'assistant',
-          p_source: 'ai',
-          p_metadata: {
-            from_ai: true,
-            action: aiResponse.action,
-            timestamp: new Date().toISOString(),
-          }
-        })
-
-      if (aiMessageError) {
-        console.error("❌ Error storing AI message:", aiMessageError)
-      }
-
-      // Track usage
-      const { error: trackError } = await supabase
-        .rpc('track_usage', {
-          p_user_id: user_id,
-          p_usage_type: 'ai_message',
-          p_count: 1
-        })
-
-      if (trackError) {
-        console.error("❌ Error tracking usage:", trackError)
-      }
-
-      return NextResponse.json({
-        success: true,
-        action: aiResponse.action,
-        message: aiResponse.outputMessage
-      })
+      // start_activity, stop_activity, unsure - no conversion needed
+      result = await processAIResponse(supabase, user_id, aiResponse, userTimezone)
     }
 
     // Check if confirmation is required
-    if (result.requiresConfirmation) {
+    if ('requiresConfirmation' in result && result.requiresConfirmation) {
       // Store LOCAL times (aiResponse still has LOCAL times, not converted)
       // Conversion will happen when user confirms
       const { data: aiMessageId, error: aiMessageError } = await supabase
         .rpc('insert_n8n_message', {
           p_user_id: user_id,
-          p_content: result.message,
+          p_content: 'message' in result ? result.message : '',
           p_activity_id: null,
           p_role: 'assistant',
           p_source: 'ai',
@@ -164,7 +129,8 @@ export async function POST(req: NextRequest) {
             aiJsonData: aiResponse.aiJsonData, // Store LOCAL times (not converted yet)
             userTimezone: userTimezone, // Store timezone for later conversion
             timestamp: new Date().toISOString(),
-          }
+          },
+          p_confirmation_state: 'pending' // Set state to pending for confirmation messages
         })
 
       if (aiMessageError) {
@@ -173,15 +139,19 @@ export async function POST(req: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        message: result.message,
+        message: 'message' in result ? result.message : '',
         requiresConfirmation: true,
         action: aiResponse.action
       })
     }
 
     // Store AI response message for non-confirmation actions
-    const activityId = 'activityId' in result ? result.activityId : 
-                      'activityIds' in result ? result.activityIds?.[0] : null
+    let activityId: string | null = null
+    if ('activityId' in result && result.activityId) {
+      activityId = result.activityId
+    } else if ('activityIds' in result && Array.isArray(result.activityIds) && result.activityIds.length > 0) {
+      activityId = result.activityIds[0]
+    }
     
     const { data: aiMessageId, error: aiMessageError } = await supabase
       .rpc('insert_n8n_message', {
@@ -468,7 +438,14 @@ async function handleLogPast(supabase: any, user_id: string, aiResponse: any, us
   // Format the entries for display using the original AI timestamps (before UTC conversion)
   const formattedEntries = entries.map(entry => {
     const startTime = new Date(entry.start)
-    const endTime = new Date(entry.end)
+    let endTime = new Date(entry.end)
+    
+    // If end time is earlier than start time, it likely crosses midnight
+    // Add 24 hours (1 day) to end time to account for this
+    if (endTime.getTime() < startTime.getTime()) {
+      endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000)
+    }
+    
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
     
     // Display the original times as-is (these are what the user specified)
@@ -498,7 +475,7 @@ async function handleLogPast(supabase: any, user_id: string, aiResponse: any, us
   })
 
   // Create confirmation message with expected changes
-  const confirmationMessage = `I found ${entries.length} past activity${entries.length > 1 ? 'ies' : 'y'} to log:\n\n` +
+  const confirmationMessage = `I found ${entries.length} past activit${entries.length > 1 ? 'ies' : 'y'} to log:\n\n` +
     formattedEntries.map(entry => 
       `• **${entry.activity}**: ${entry.start} to ${entry.end} (${entry.duration})`
     ).join('\n') +
@@ -529,8 +506,18 @@ async function handleLogPastExecution(supabase: any, user_id: string, aiJsonData
 
   for (const entry of entries) {
     const startTime = new Date(entry.start)
-    const endTime = new Date(entry.end)
+    let endTime = new Date(entry.end)
+    
+    // If end time is earlier than start time, it likely crosses midnight
+    // Add 24 hours (1 day) to end time to account for this
+    if (endTime.getTime() < startTime.getTime()) {
+      endTime = new Date(endTime.getTime() + 24 * 60 * 60 * 1000)
+    }
+    
     const durationMinutes = Math.round((endTime.getTime() - startTime.getTime()) / 60000)
+    
+    // Update entry.end with the corrected time for database storage
+    const correctedEndTime = endTime.toISOString()
 
     console.log(`🔍 Database insertion - Activity: ${entry.activity}, Start: ${entry.start}, End: ${entry.end}`)
 
@@ -539,7 +526,7 @@ async function handleLogPastExecution(supabase: any, user_id: string, aiJsonData
         p_user_id: user_id,
         p_activity_name: entry.activity,
         p_started_at: entry.start,
-        p_ended_at: entry.end,
+        p_ended_at: correctedEndTime,
         p_duration_minutes: durationMinutes,
       })
 
@@ -718,35 +705,50 @@ async function handleConvertToLocalTimeTool(toolUse: any, timezone: string) {
 }
 
 // Handle confirmation responses
-async function handleConfirmation(userMessage: string, userId: string, userTimezone: string) {
-  console.log("✅ Handling confirmation:", userMessage)
+async function handleConfirmation(messageId: string, userMessage: string, userId: string, userTimezone: string) {
+  console.log("✅ Handling confirmation:", userMessage, "for messageId:", messageId)
   
-  const isYes = userMessage.toLowerCase().includes('yes')
+  const isYes = userMessage.toLowerCase().includes('yes') || userMessage.toLowerCase() === 'y' || userMessage.toLowerCase() === 'confirm'
   
-  if (!isYes) {
-    return {
-      action: "confirmation_declined", 
-      outputMessage: "❌ Operation cancelled.",
-      aiJsonData: null
-    }
-  }
-
-  // Get the last assistant message with aiJsonData (contains LOCAL times)
+  // Get the specific message by ID
   const supabase = await createClient()
   const { data: lastMessage, error } = await supabase
     .from('messages')
     .select('*')
+    .eq('id', messageId)
     .eq('user_id', userId)
     .eq('role', 'assistant')
-    .order('created_at', { ascending: false })
-    .limit(1)
     .single()
-
+  
   if (error || !lastMessage) {
     return {
       action: "confirmation_error",
       outputMessage: "❌ Could not find the operation to confirm.",
-      aiJsonData: null
+      activityId: null,
+      activityIds: undefined
+    }
+  }
+
+  // Check if already confirmed or cancelled using confirmation_state column
+  if (lastMessage.confirmation_state === 'confirmed' || lastMessage.confirmation_state === 'cancelled') {
+    const statusMessage = lastMessage.confirmation_state === 'confirmed' 
+      ? "✅ Operation confirmed." 
+      : "❌ Operation cancelled."
+    return {
+      action: "confirmation_already_processed",
+      outputMessage: statusMessage,
+      activityId: null,
+      activityIds: undefined
+    }
+  }
+  
+  // Check if not pending (should be pending for confirmation)
+  if (lastMessage.confirmation_state !== 'pending') {
+    return {
+      action: "confirmation_error",
+      outputMessage: "❌ This message is not in a pending state for confirmation.",
+      activityId: null,
+      activityIds: undefined
     }
   }
 
@@ -781,20 +783,62 @@ async function handleConfirmation(userMessage: string, userId: string, userTimez
     }, storedTimezone)
   }
   
+  // Update message confirmation_state
+  let outputMessage: string
+  let confirmationState: string
+  
   if (result.success) {
     // Extract activity IDs from result
-    const activityId = result.activityId || (result.activityIds && result.activityIds[0]) || null
+    let activityId: string | null = null
+    let activityIds: string[] | undefined = undefined
+    
+    if ('activityId' in result && result.activityId) {
+      activityId = result.activityId
+    } else if ('activityIds' in result && Array.isArray(result.activityIds) && result.activityIds.length > 0) {
+      activityIds = result.activityIds
+      activityId = result.activityIds[0]
+    }
+    
+    outputMessage = "✅ Operation confirmed."
+    confirmationState = "confirmed"
+    
+    // Update message in database with confirmation state
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        confirmation_state: confirmationState
+      })
+      .eq('id', messageId)
+    
+    if (updateError) {
+      console.error("❌ Error updating message with confirmation state:", updateError)
+    }
     
     return {
       action: "confirmation_accepted",
-      outputMessage: "✅ Operation completed successfully!",
+      outputMessage: outputMessage,
       activityId: activityId,
-      activityIds: result.activityIds
+      activityIds: activityIds
     }
   } else {
+    outputMessage = `❌ Operation failed: ${('error' in result ? result.error : 'Unknown error')}`
+    confirmationState = "cancelled" // Use cancelled for errors
+    
+    // Update message in database with cancelled state
+    const { error: updateError } = await supabase
+      .from('messages')
+      .update({
+        confirmation_state: confirmationState
+      })
+      .eq('id', messageId)
+    
+    if (updateError) {
+      console.error("❌ Error updating message with cancelled state:", updateError)
+    }
+    
     return {
       action: "confirmation_error",
-      outputMessage: `❌ Operation failed: ${(result as any).error || 'Unknown error'}`,
+      outputMessage: outputMessage,
       activityId: null
     }
   }
