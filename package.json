@@ -6,7 +6,10 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "eslint .",
-    "start": "next start"
+    "start": "next start",
+    "validate-lockfile": "node scripts/check-lockfile.js",
+    "check-lockfile": "pnpm install --frozen-lockfile 2>&1 | grep -q 'Lockfile is up to date' && echo '✅ Lockfile is in sync' || (echo '❌ Lockfile is out of sync. Run: pnpm install' && exit 1)",
+    "prepare": "node scripts/check-lockfile.js || true"
   },
   "dependencies": {
     "@ai-sdk/react": "2.0.72",
@@ -68,7 +71,6 @@
     "tailwindcss-animate": "^1.0.7",
     "url": "latest",
     "vaul": "^0.9.9",
-    "webkit-speech-api": "latest",
     "zod": "3.25.76"
   },
   "devDependencies": {

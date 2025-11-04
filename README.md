@@ -29,6 +29,26 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
+## Lockfile Management
+
+This project uses `pnpm` for package management. To prevent lockfile sync issues:
+
+1. **Always run `pnpm install` after modifying `package.json`** - This updates `pnpm-lock.yaml` to match your dependencies.
+
+2. **Commit `pnpm-lock.yaml`** - Always commit the lockfile with your changes to ensure reproducible builds.
+
+3. **Validation checks are in place:**
+   - Pre-commit hook validates lockfile sync before commits
+   - CI/CD pipeline validates lockfile sync on push/PR
+   - Vercel builds use `--frozen-lockfile` to catch issues early
+
+4. **If you see lockfile errors:**
+   ```bash
+   pnpm install
+   git add pnpm-lock.yaml
+   git commit -m "Update lockfile"
+   ```
+
 ## Deploy on Vercel
 
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
